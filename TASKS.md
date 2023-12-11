@@ -7,14 +7,13 @@
 - [X] Instalar TKinter
 - [X] Instalar Git
 - [X] Configurar repositório inicial no GitHub
-- [ ] Pesquisar e definir as melhores práticas para integração com Google Drive
+- [X] Pesquisar e definir as melhores práticas para integração com Google Drive
 
 ### Etapa 2 - Integração com Google Drive
-- [ ] Investigar APIs disponíveis para autenticação e manipulação de arquivos
-- [ ] Autenticação OAuth para contas do Google
+- [X] Investigar APIs disponíveis para autenticação e manipulação de arquivos
+- [X] Autenticação OAuth para contas do Google
 - [ ] Interface de usuário para conectar e desconectar contas
 - [ ] Implementar o upload e download de arquivos para/da conta vinculada do Google Drive
-- [ ] Gerenciar diferentes tipos de arquivos do projeto
 
 ### Etapa 3 - Integração com GitHub e Git Versioning
 - [ ] Autenticação via token
@@ -38,6 +37,7 @@
 - [ ] Adicionar uma guia de tarefas e problemas à interface
 - [ ] Desenvolver um sistema de notificação para manter a equipe informada
 - [ ] Notificar sobre alterações, novas tarefas, e atualizações importantes
+- [ ] Gerenciar diferentes tipos de arquivos do projeto
 
 ### Etapa 7 - Testes de integração e primeira versão
 - [ ] Realizar testes de integração e unidade
