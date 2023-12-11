@@ -77,7 +77,6 @@ Implemente um modo offline que permita aos usuários trabalhar no projeto sem co
 ## Instalação
 Clone o repositório do GameFlowConnect:
 ```bash
-bash
 git clone https://github.com/seu-usuario/GameFlowConnect.git
 ```
 
