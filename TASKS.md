@@ -22,7 +22,8 @@
 - [ ] Permitir commits, criação de branches, e merges
 
 ### Etapa 4 - Implementação da Interface do Usuário (UI)
-- [ ] Criar a estrutura inicial da interface do usuário usando TKinter
+- [ ] Estruturar designs patterns e boas práticas com TKinter
+- [X] Criar a estrutura inicial da interface do usuário usando TKinter
 - [ ] Design básico para as guias (Google Drive, GitHub, Git)
 - [ ] Adicionar elementos de UI para upload/download de arquivos
 
@@ -31,6 +32,7 @@
 - [ ] Sincronização automática de alterações entre membros da equipe
 - [ ] Adicionar funcionalidade de visualização de assets no próprio tool
 - [ ] Visualizar imagens, modelos e outros ativos diretamente na aplicação
+- [ ] Criação de temas
 
 ### Etapa 6 - Melhorar funções de gerenciamento
 - [ ] Implementar um sistema de rastreamento de tarefas e problemas
