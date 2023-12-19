@@ -8,6 +8,7 @@
 - [X] Instalar Git
 - [X] Configurar repositório inicial no GitHub
 - [X] Pesquisar e definir as melhores práticas para integração com Google Drive
+- [X] Pesquisar e definir as melhores práticas para integração com Github
 
 ### Etapa 2 - Integração com Google Drive
 - [X] Investigar APIs disponíveis para autenticação e manipulação de arquivos
@@ -16,7 +17,7 @@
 - [ ] Implementar o upload e download de arquivos para/da conta vinculada do Google Drive
 
 ### Etapa 3 - Integração com GitHub e Git Versioning
-- [ ] Autenticação via token
+- [X] Autenticação via token
 - [ ] Interface para conectar e desconectar repositórios
 - [ ] Integrar o sistema de versionamento Git no projeto
 - [ ] Permitir commits, criação de branches, e merges
