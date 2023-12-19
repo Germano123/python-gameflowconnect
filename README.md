@@ -69,32 +69,24 @@ Implemente um modo offline que permita aos usuários trabalhar no projeto sem co
 
 ## Requisitos
 - Python 3.6 ou superior
-- Biblioteca TKinter
-- Git instalado no sistema
 - Conta no Google Drive (para integração)
 - Conta no GitHub (para integração)
+- [Access Token do Github](https://docs.github.com/pt/enterprise-cloud@latest/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#como-criar-um-fine-grained-personal-access-token)
 
 ## Instalação
-Clone o repositório do GameFlowConnect:
+1. Clone o repositório do GameFlowConnect:
 ```bash
-git clone https://github.com/seu-usuario/GameFlowConnect.git
+git clone https://github.com/Germano123/python-gameflowconnect.git
 ```
 
-Instale as dependências:
+2. Instale as dependências:
 ```bash
 pip install -r requirements.txt
-Configuração
-Execute o arquivo config.py para configurar suas credenciais do Google Drive e do GitHub.
 ```
 
-Siga as instruções para autenticação e autorização.
-
-Uso
-Execute o aplicativo
-
+3. Uso:
 ```bash
-Copy code
-python main.py
+python ./main.py
 Faça login com suas credenciais do Google Drive e do GitHub.
 ```
 
@@ -110,3 +102,6 @@ As cores escolhidas para este projeto consistem em:
 
 ## Contribuições
 Contribuições são bem-vindas! Por favor, consulte CONTRIBUTING.md para obter detalhes sobre como contribuir para o projeto.
+
+## Sugestões
+Deixe suas sugestões de features nas [issues]().
