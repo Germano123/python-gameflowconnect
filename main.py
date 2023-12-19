@@ -12,25 +12,36 @@ colors = {
 
 class FrameWidget():
 	# __init__ function for class FrameWidget
-    def __init__(self):
-        pass
+    def __init__(self, widget, xPos, yPos):
+        self.__widget = widget
+        self.__xPos = xPos
+        self.__yPos = yPos
+        self.show()
+
+    def show(self):
+        self.__widget.place(x=self.__xPos, y=self.__yPos)
+
+    def hide(self):
+        self.__widget.place_forget()
 
 # frame 1:n widgets
 class PageFrame():
 	# __init__ function for class PageFrame
     def __init__(self,
-                 startx,
-                 starty,
-                 width,
-                 height,
-                 border,
-                 backgroundcolor,
-                 highlightbackground,
-                 highlightthickness):
+                 startx: float,
+                 starty: float,
+                 width: float,
+                 height: float,
+                 border: float,
+                 backgroundcolor: StringVar,
+                 highlightbackground: StringVar,
+                 highlightthickness: StringVar,
+                 widgets: list[FrameWidget]):
         self.__startx = startx
         self.__starty = starty
         self.__width = width
         self.__height = height
+        self.__widgets = widgets
         self.frame = Frame(
                         root,
                         bd=border, 
@@ -51,6 +62,9 @@ class PageFrame():
     def hide(self):
         self.frame.place_forget()
 
+# TODO: check if necessary this implementation
+# current usage is a variable pages of type list PageFrames
+# app.pages: PageFrames[]
 # page 1:n frames
 class Page():
 	# __init__ function for class Page
@@ -76,12 +90,13 @@ class Application():
         # self.root.maxsize("1200x600")
         # widget -> Label(self.main_frame, text="First page").place(relx=0.05, rely=0.05)
         self.create_page("First page", [
-            PageFrame(0.02, 0.02, 0.96, 0.3, 4, colors["secondary"], colors["terciary"], 2),
-            PageFrame(0.02, 0.35, 0.96, 0.6, 4, colors["secondary"], colors["terciary"], 2),
+            PageFrame(0.02, 0.02, 0.96, 0.3, 4, colors["secondary"], colors["terciary"], 2, [
+                FrameWidget(Button(self.root), x=50, y=50)
+            ]),
+            PageFrame(0.02, 0.35, 0.96, 0.6, 4, colors["secondary"], colors["terciary"], 2, []),
         ])
-        # TODO: frame in front another frame
         self.create_page("Second page", [
-            PageFrame(0.1, 0.02, 0.8, 0.6, 8, colors["secondary"], colors["terciary"], 2),
+            PageFrame(0.1, 0.02, 0.8, 0.6, 8, colors["secondary"], colors["terciary"], 2, []),
         ])
         self.change_page("First page")
 
@@ -91,7 +106,7 @@ class Application():
 
     # function to change pages
     def change_page(self, pagename):
-        print("Changed to page " + pagename)
+        # print("Changed to page " + pagename)
         for frame in self.pages[pagename]:
             frame.show()
 
