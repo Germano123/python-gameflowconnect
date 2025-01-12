@@ -12,7 +12,7 @@ colors = {
 
 class FrameWidget():
 	# __init__ function for class FrameWidget
-    def __init__(self, widget, xPos, yPos):
+    def __init__(self, widget: Widget, xPos, yPos):
         self.__widget = widget
         self.__xPos = xPos
         self.__yPos = yPos
@@ -91,7 +91,7 @@ class Application():
         # widget -> Label(self.main_frame, text="First page").place(relx=0.05, rely=0.05)
         self.create_page("First page", [
             PageFrame(0.02, 0.02, 0.96, 0.3, 4, colors["secondary"], colors["terciary"], 2, [
-                FrameWidget(Button(self.root), x=50, y=50)
+                FrameWidget(Button(self.root), xPos=50, yPos=50)
             ]),
             PageFrame(0.02, 0.35, 0.96, 0.6, 4, colors["secondary"], colors["terciary"], 2, []),
         ])

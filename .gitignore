@@ -1,5 +1,5 @@
-credentials.json
-tokens.json
-*.env
-/tests
 /__pycache__
+src/tests
+credentials.json
+token.json
+*.env

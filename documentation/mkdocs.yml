@@ -1,0 +1,62 @@
+site_name: GameFlow Connect
+repo_name: GitHub - GameFlow Connect
+repo_url: https://github.com/Germano123/python-gameflowconnect
+edit_uri: edit/main/documentation/
+
+theme:
+  name: material
+  # logo: assets/logo.png
+  # favicon: assets/favicon.ico
+  palette:
+    primary: "teal"
+    accent: "cyan"
+  font:
+    text: "Roboto"
+    code: "Roboto Mono"
+  language: "en"
+  icon:
+    repo: fontawesome/brands/github
+    edit: material/pencil 
+    view: material/eye
+  features:
+    - content.action.edit
+    - header.autohide
+    - navigation.tabs
+    - navigation.path
+    - navigation.prune
+    - navigation.top
+
+extra:
+  social:
+    - icon: fontawesome/brands/instagram
+      link: https://www.instagram.com/geh_m_gomes/
+      name: instagram
+    - icon: fontawesome/brands/github
+      link: https://github.com/Germano123
+      name: github
+
+nav:
+  - Home: index.md
+  - Getting Started:
+      - Installation: 1 getting_started/1 installation.md
+      - Usage Guide: 1 getting_started/2 usage.md
+      - Requirements: 1 getting_started/3 requirements.md
+  - Features:
+      - Core Features: 2 features/1 core_features.md
+      - Secondary Features: 2 features/2 secondary_features.md
+  - Technical Details:
+      - Architecture: 3 technical_details/1 architecture.md
+      - UI Design: 3 technical_details/2 ui_design.md
+      - Integrations: 3 technical_details/3 integrations.md
+  - Collaboration:
+      - Contributing Guide: 4 collaboration/1 contributing.md
+      - Roadmap: 4 collaboration/2 roadmap.md
+      - Changelog: 4 collaboration/3 changelog.md
+  - Troubleshooting: troubleshooting.md
+  - FAQ: faq.md
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+
+copyright: Copyright &copy; 2025 - Germano Gomes
