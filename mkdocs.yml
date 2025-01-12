@@ -34,24 +34,31 @@ extra:
     - icon: fontawesome/brands/github
       link: https://github.com/Germano123
       name: github
+  alternate:
+    - name: English
+      link: /en/ 
+      lang: en
+    - name: Portuguese (Brasil)
+      link: /ptbr/
+      lang: pt-BR
 
 nav:
   - Home: index.md
   - Getting Started:
-      - Installation: 1 getting_started/1 installation.md
-      - Usage Guide: 1 getting_started/2 usage.md
-      - Requirements: 1 getting_started/3 requirements.md
+      - Installation: getting_started/installation.md
+      - Usage Guide: getting_started/usage.md
+      - Requirements: getting_started/requirements.md
   - Features:
-      - Core Features: 2 features/1 core_features.md
-      - Secondary Features: 2 features/2 secondary_features.md
+      - Core Features: features/core_features.md
+      - Secondary Features: features/secondary_features.md
   - Technical Details:
-      - Architecture: 3 technical_details/1 architecture.md
-      - UI Design: 3 technical_details/2 ui_design.md
-      - Integrations: 3 technical_details/3 integrations.md
+      - Architecture: technical_details/architecture.md
+      - UI Design: technical_details/ui_design.md
+      - Integrations: technical_details/integrations.md
   - Collaboration:
-      - Contributing Guide: 4 collaboration/1 contributing.md
-      - Roadmap: 4 collaboration/2 roadmap.md
-      - Changelog: 4 collaboration/3 changelog.md
+      - Contributing Guide: collaboration/contributing.md
+      - Roadmap: collaboration/roadmap.md
+      - Changelog: collaboration/changelog.md
   - Troubleshooting: troubleshooting.md
   - FAQ: faq.md
 
