@@ -47,7 +47,6 @@ nav:
   - Getting Started:
       - Installation: getting_started/installation.md
       - Usage Guide: getting_started/usage.md
-      - Requirements: getting_started/requirements.md
   - Features:
       - Core Features: features/core_features.md
       - Secondary Features: features/secondary_features.md
@@ -65,5 +64,10 @@ nav:
 markdown_extensions:
   - admonition
   - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: "mermaid"
+          class: "mermaid"
+          format: !!python/name:pymdownx.superfences.fence_code_format
 
 copyright: Copyright &copy; 2025 - Germano Gomes
