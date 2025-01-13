@@ -1,24 +1,24 @@
-# Welcome to GameFlowConnect
+# **Welcome to GameFlowConnect**
 
 GameFlowConnect is a collaborative platform designed for artists, game developers, and designers to streamline asset management in game development projects. With an intuitive interface and powerful integrations, GameFlowConnect aims to simplify workflows, minimize repetitive tasks, and enhance team collaboration.
 
 ---
 
-## Why GameFlowConnect?
+## **Why GameFlowConnect?**
 
-### For Artists:
+### **For Artists:**
 - **Simplified Workflow**: Eliminate the complexity of managing game assets by using an intuitive UI built with ease of use in mind.
 - **Version Control Without Hassle**: Manage asset versions seamlessly without requiring advanced technical knowledge.
 - **Integrated Cloud Storage**: Utilize Google Drive integration for fast and secure storage of your artwork, animations, and models.
 
-### For Developers & Designers:
+### **For Developers & Designers:**
 - **GitHub Integration**: Sync directly with your repository for consistent version control and collaboration.
 - **Task Management Made Easy**: Focus on development while staying informed of asset updates and collaboration changes.
 - **Enhanced Team Communication**: Keep everyone on the same page with real-time notifications and task tracking.
 
 ---
 
-## Upcoming Priorities
+## **Upcoming Priorities**
 
 As we continue to improve GameFlowConnect, our development roadmap focuses on the following features:
 
