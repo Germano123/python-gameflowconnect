@@ -65,12 +65,17 @@ GameFlowConnect addresses these challenges by offering an accessible platform fo
    git clone https://github.com/Germano123/python-gameflowconnect.git
    ```
 
-2. Install the dependencies:
+2. Create virtual environment:
+   ```bash
+   python -m venv myven
+   ```
+
+3. Install the dependencies:
    ```bash
    pip install -r requirements.txt
    ```
 
-3. Run the tool:
+4. Run the tool:
    ```bash
    python ./main.py
    ```
@@ -80,6 +85,7 @@ Navigate through the intuitive features to share, preview, and version control y
 
 ## Visual Identity
 The project's color scheme consists of:
+
 <div style="display: flex; justify-content: center; align-items: center; height: 100px">
     <div style="display: flex; justify-content: center; align-items: center; color: white; background-color: #1e3743; width: 180px; height: 100%; margin: 5px; border-radius: 23px"><p>Primary: #1e3743</p></div>
     <div style="display: flex; justify-content: center; align-items: center; color: white; background-color: #1e3760; width: 180px; height: 100%; margin: 5px; border-radius: 23px"><p>Secondary: #1e3760</p></div>

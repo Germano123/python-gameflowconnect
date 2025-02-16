@@ -11,19 +11,41 @@ Welcome to GameFlow Connect! This guide will help you set up and start using the
 2. **Install Tkinter**:
 
     - Tkinter is bundled with most Python installations. Verify its availability by running:
+    
     ```bash
     python -m tkinter
     ```
+    
     - If it's missing, follow your operating system's specific instructions to install it.
 
 3. **Clone the Repository**:
 
     - Clone the GameFlow Connect repository from GitHub:
-     ```bash
-     git clone https://github.com/Germano123/python-gameflowconnect.git
-     ```
+    
+    ```bash
+    git clone https://github.com/Germano123/python-gameflowconnect.git
+    ```
 
-4. **Install Dependencies**:
+4. **Create a virtual environment (Opcional)**:
+    > Although this is opcional, we recommend creating a virtual env.
+
+    ```bash
+    python -m venv venv
+    ```
+
+    - On Linux/MacOS
+    
+    ```bash
+    source venv/bin/activate 
+    ```
+
+    - On Windows
+
+    ```bash
+    venv\\Scripts\\activate 
+    ```
+
+5. **Install Dependencies**:
 
     - Navigate to the project directory and install required Python packages:
     ```bash
@@ -37,7 +59,7 @@ Welcome to GameFlow Connect! This guide will help you set up and start using the
 
     - Run the following command to start GameFlow Connect:
     ```bash
-    python main.py
+    python src/main.py
     ```
 
 2. **Explore the Interface**:
