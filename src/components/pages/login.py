@@ -167,7 +167,8 @@ class LoginPage(DefaultLayout):
                 self.after(0, lambda: self._set_status("GitHub conectado ✓", "success"))
                 self.after(0, self._check_ready)
             except Exception as e:
-                self.after(0, lambda: self._set_status(f"Erro GitHub: {e}", "error"))
+                err_msg = str(e)
+                self.after(0, lambda msg=err_msg: self._set_status(f"Erro GitHub: {msg}", "error"))
             finally:
                 self.after(0, lambda: self._show_progress(False))
 
@@ -188,9 +189,11 @@ class LoginPage(DefaultLayout):
                 self.after(0, lambda: self._set_status("Google Drive conectado ✓", "success"))
                 self.after(0, self._check_ready)
             except Exception as e:
-                self.after(0, lambda: self._set_status(f"Erro Drive: {e}", "error"))
+                err_msg = str(e)
+                self.after(0, lambda msg=err_msg: self._set_status(f"Erro Drive: {msg}", "error"))
             finally:
                 self.after(0, lambda: self._show_progress(False))
+
 
         threading.Thread(target=run, daemon=True).start()
 

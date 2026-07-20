@@ -48,22 +48,42 @@ class DriveService:
         """
         creds = None
         if os.path.exists(TOKEN_PATH):
-            creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
+            try:
+                creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
+            except Exception:
+                creds = None
 
         if not creds or not creds.valid:
             if creds and creds.expired and creds.refresh_token:
-                creds.refresh(Request())
-            else:
+                try:
+                    creds.refresh(Request())
+                except Exception:
+                    # If invalid_grant or token expired/revoked, remove stale token.json and reset
+                    if os.path.exists(TOKEN_PATH):
+                        try:
+                            os.remove(TOKEN_PATH)
+                        except OSError:
+                            pass
+                    creds = None
+
+            if not creds:
+                if not os.path.exists(CREDENTIALS_PATH):
+                    raise FileNotFoundError(
+                        f"Arquivo de credenciais OAuth não encontrado: '{CREDENTIALS_PATH}'. "
+                        "Copie o arquivo credentials.json baixado do Google Cloud Console para a raiz do projeto."
+                    )
                 flow = InstalledAppFlow.from_client_secrets_file(
                     CREDENTIALS_PATH, SCOPES
                 )
                 creds = flow.run_local_server(port=0)
+
             with open(TOKEN_PATH, "w") as token:
                 token.write(creds.to_json())
 
         self._creds = creds
         self._service = build("drive", "v3", credentials=self._creds)
         return True
+
 
     @property
     def is_authenticated(self) -> bool:

@@ -205,7 +205,8 @@ class DashboardPage(DefaultLayout):
             assets = list_use_case.execute(asset_type=AssetType.IMAGE)
             self.after(0, lambda: self._render_drive(assets))
         except Exception as e:
-            self.after(0, lambda: self._render_empty(self._drive_scroll, f"Erro: {e}"))
+            err_msg = str(e)
+            self.after(0, lambda msg=err_msg: self._render_empty(self._drive_scroll, f"Erro: {msg}"))
 
     def _load_github(self) -> None:
         from state import AppState
@@ -223,7 +224,8 @@ class DashboardPage(DefaultLayout):
             else:
                 self.after(0, lambda: self._status_lbl.configure(text=f"Conectado como @{username}"))
         except Exception as e:
-            self.after(0, lambda: self._render_empty(self._git_scroll, f"Erro: {e}"))
+            err_msg = str(e)
+            self.after(0, lambda msg=err_msg: self._render_empty(self._git_scroll, f"Erro: {msg}"))
 
     # ------------------------------------------------------------------ #
     # Renderers
@@ -259,14 +261,16 @@ class DashboardPage(DefaultLayout):
                 sync_use_case = SyncAssetUseCase(remote_repo=storage_repo, local_repo=local_repo)
                 saved_path = sync_use_case.download_to_engine(asset)
 
-                self.after(0, lambda: self._status_lbl.configure(
-                    text=f"✓ Sincronizado: {asset.name} em {saved_path}"
+                self.after(0, lambda p=saved_path, a=asset: self._status_lbl.configure(
+                    text=f"✓ Sincronizado: {a.name} em {p}"
                 ))
                 self.after(800, self._refresh_all)
             except Exception as e:
-                self.after(0, lambda: self._status_lbl.configure(text=f"Erro sync: {e}"))
+                err_msg = str(e)
+                self.after(0, lambda msg=err_msg: self._status_lbl.configure(text=f"Erro sync: {msg}"))
 
         threading.Thread(target=run, daemon=True).start()
+
 
 
     def _render_github(self, repos: list) -> None:
@@ -362,7 +366,9 @@ class DashboardPage(DefaultLayout):
                 self.after(0, lambda: self._status_lbl.configure(text=f"Upload OK — ID: {fid}"))
                 self.after(800, self._refresh_all)
             except Exception as e:
-                self.after(0, lambda: self._status_lbl.configure(text=f"Erro upload: {e}"))
+                err_msg = str(e)
+                self.after(0, lambda msg=err_msg: self._status_lbl.configure(text=f"Erro upload: {msg}"))
+
 
         threading.Thread(target=run, daemon=True).start()
 
