@@ -1,86 +1,105 @@
-# routes.py
+"""
+routes.py — Application router.
+
+Defines the App class (customtkinter root window) and manages page registration
+and navigation between pages using a grid-stacking strategy.
+"""
+import customtkinter as ctk
+from typing import Type
+
 from components.pages.home import HomePage
 from components.pages.login import LoginPage
 from components.pages.register import RegisterPage
 from components.pages.dashboard import DashboardPage
 
-import tkinter as tk
-from typing import Type
-# from pages import HomePage, LoginPage, DashboardPage
+# ------------------------------------------------------------------ #
+# Global CTk theme configuration
+# ------------------------------------------------------------------ #
+ctk.set_appearance_mode("dark")          # "dark" | "light" | "system"
+ctk.set_default_color_theme("blue")      # base theme (overridden by our palette)
 
-class App(tk.Tk):
+
+class App(ctk.CTk):
+    """
+    Root application window.
+
+    Manages page registration and navigation.
+    All pages are stacked on top of each other via grid row=0, col=0,
+    and shown/hidden by calling tkraise() / grid_remove().
+    """
+    WIDTH  = 1100
+    HEIGHT = 700
+    MIN_W  = 860
+    MIN_H  = 560
+
     def __init__(self):
         super().__init__()
-        # application configs
-        self.title("GameFlow Connect")
-        self.geometry("900x600")
-        
-        # dictionary to save pages
-        self.pages = {} 
-        self.current_page = None
 
-        # register pages in the application
-        self.register_page("HomePage", HomePage)
-        self.register_page("LoginPage", LoginPage)
+        # Window setup
+        self.title("GameFlow Connect")
+        self.geometry(f"{self.WIDTH}x{self.HEIGHT}")
+        self.minsize(self.MIN_W, self.MIN_H)
+
+        # Center on screen
+        self.update_idletasks()
+        x = (self.winfo_screenwidth()  - self.WIDTH)  // 2
+        y = (self.winfo_screenheight() - self.HEIGHT) // 2
+        self.geometry(f"{self.WIDTH}x{self.HEIGHT}+{x}+{y}")
+
+        # Grid fills window
+        self.grid_rowconfigure(0, weight=1)
+        self.grid_columnconfigure(0, weight=1)
+
+        # Page registry
+        self.pages: dict[str, ctk.CTkFrame] = {}
+        self.current_page: str | None = None
+
+        # Register all pages
+        self.register_page("HomePage",      HomePage)
+        self.register_page("LoginPage",     LoginPage)
+        self.register_page("RegisterPage",  RegisterPage)
         self.register_page("DashboardPage", DashboardPage)
 
-        # show initial page
+        # Show initial page
         self.show_page("HomePage")
 
-    """
-    Registers a new page to the application.
+    def register_page(self, name: str, page_class: Type[ctk.CTkFrame]) -> None:
+        """
+        Instantiates a page and places it in the grid stack.
 
-    This method initializes the page by creating an instance of the given `page_class`
-    and stores it in the `pages` dictionary using the provided name as the key.
-    The registered page is placed within the application window using the `grid` geometry manager
-    and is set to occupy the full available space.
-
-    Args:
-        name (str): The name used to identify the page. It acts as the key
-        in the `pages` dictionary.
-        page_class (Type[tk.Frame]): The class of the page to be registered.
-        This class should inherit from `tk.Frame` and implement its layout and logic.
-
-    Returns:
-        None
-
-    Notes:
-        - This method does not display the page immediately. Use `show_page` to bring a page to the front.
-        - Pages should be designed to handle their own layout and logic internally.
-    """
-    def register_page(self, name: str, page_class: Type[tk.Frame]) -> None:
+        Args:
+            name (str): Unique page identifier used by show_page().
+            page_class: A class inheriting from ctk.CTkFrame.
+        """
         frame = page_class(self)
         self.pages[name] = frame
         frame.grid(row=0, column=0, sticky="nsew")
 
-    """
-    Hides all widgets of the given page.
-    Works regardless of the positioning method (pack, grid, or place).
-    """
-    def hide_page(self, page: tk.Frame) -> None:
-        for widget in page.winfo_children():
-            widget.pack_forget()
-            widget.grid_forget()
-            widget.place_forget()
-        page.grid_remove()
-
-    """
-    Show the given `name` page if exsits.
-    """
     def show_page(self, name: str) -> None:
-        # debug mode == True > show listed pages
-        # print(f"Available pages: {list(self.pages.keys())}")
+        """
+        Brings the named page to the front, hiding all others.
 
-        # if trying to access a page that doesn't exist throw error
+        Args:
+            name (str): The page to display.
+
+        Raises:
+            ValueError: If the page name has not been registered.
+        """
         if name not in self.pages:
-            raise ValueError(f"The page '{name}' does not exist in registered pages.")
+            raise ValueError(f"Page '{name}' is not registered. Available: {list(self.pages)}")
 
-        # set the current page to page to show
         self.current_page = name
 
-        # hide all the others pages
+        # Hide all pages
         for page in self.pages.values():
-            self.hide_page(page)
+            page.grid_remove()
 
-        # shwo current page
-        self.pages[name].grid()
+        # Show the target page
+        self.pages[name].grid(row=0, column=0, sticky="nsew")
+        self.pages[name].tkraise()
+
+        # Notify the page it has been shown (optional lifecycle hook)
+        page = self.pages[name]
+        if hasattr(page, "on_show") and callable(page.on_show):
+            self.after(80, page.on_show)
+

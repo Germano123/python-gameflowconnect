@@ -1,47 +1,82 @@
-import tkinter as tk
-from tkinter import ttk
+import customtkinter as ctk
+from typing import Optional, Callable
+
+# ------------------------------------------------------------------ #
+# Paleta de cores da identidade visual GameFlowConnect
+# ------------------------------------------------------------------ #
+COLORS = {
+    "primary":    "#1e3743",
+    "secondary":  "#1e3760",
+    "success":    "#00aa00",
+    "success_hover": "#008800",
+    "danger":     "#c0392b",
+    "danger_hover": "#a93226",
+    "neutral":    "#4a5568",
+    "neutral_hover": "#3a4558",
+    "text_light": "#ffffff",
+    "text_dark":  "#1e3743",
+    "primary_hover":   "#16293a",
+    "secondary_hover": "#162850",
+}
+
+FONT_SIZES = {
+    "small":  10,
+    "medium": 13,
+    "large":  15,
+}
+
+CORNER_RADIUS = {
+    "small":  6,
+    "medium": 8,
+    "large":  10,
+}
+
 
 class ButtonComponent:
+    """
+    Atom component: a styled button using customtkinter.
+
+    Args:
+        parent: The parent widget.
+        label (str): Button label text.
+        onClick (Callable, optional): Callback invoked on click.
+        variant (str): "primary" | "secondary" | "success" | "danger" | "neutral".
+        disabled (bool): If True, the button is non-interactive.
+        icon (str, optional): Path to an image file to display on the button.
+        size (str): "small" | "medium" | "large".
+        width (int, optional): Fixed button width in pixels.
+    """
     def __init__(
-    self,
-    parent,
-    label="Button",
-    onClick=None,
-    variant="primary",
-    disabled=False,
-    icon=None,
-    size="medium"):
-        self.button = ttk.Button(
-            parent,
+        self,
+        parent,
+        label: str = "Button",
+        onClick: Optional[Callable] = None,
+        variant: str = "primary",
+        disabled: bool = False,
+        icon: Optional[str] = None,
+        size: str = "medium",
+        width: int = 0,
+    ):
+        fg    = COLORS.get(variant, COLORS["primary"])
+        hover = COLORS.get(f"{variant}_hover", COLORS["primary_hover"])
+
+        kwargs = dict(
+            master=parent,
             text=label,
             command=onClick,
-            state="disabled" if disabled else "normal")
-        self.style_button(variant, size)
+            state="disabled" if disabled else "normal",
+            fg_color=fg,
+            hover_color=hover,
+            text_color=COLORS["text_light"],
+            corner_radius=CORNER_RADIUS[size],
+            font=ctk.CTkFont(family="Arial", size=FONT_SIZES[size], weight="bold"),
+        )
+        if width:
+            kwargs["width"] = width
 
-        if icon:
-            self.add_icon(icon)
+        self.button = ctk.CTkButton(**kwargs)
 
-    def style_button(self, variant, size):
-        # Aplica estilos ao botão
-        style = ttk.Style()
-        style.configure("primary.TButton", background="#007BFF", foreground="white")
-        style.configure("secondary.TButton", background="#6C757D", foreground="white")
-        style.configure("danger.TButton", background="#DC3545", foreground="white")
-        style.configure("small.TButton", padding=2)
-        style.configure("medium.TButton", padding=5)
-        style.configure("large.TButton", padding=10)
-
-        # Estilo baseado na variante
-        style_name = f"{variant}.{size}.TButton"
-        style.configure(style_name)
-        self.button.configure(style=style_name)
-
-    def add_icon(self, icon_path):
-        # Adiciona um ícone ao botão
-        icon_image = tk.PhotoImage(file=icon_path)
-        self.button.configure(image=icon_image)
-        self.button.image = icon_image  # Evita garbage collection
-
+    # Geometry manager proxies — keeps the same API as before
     def pack(self, **kwargs):
         self.button.pack(**kwargs)
 
@@ -50,3 +85,6 @@ class ButtonComponent:
 
     def place(self, **kwargs):
         self.button.place(**kwargs)
+
+    def configure(self, **kwargs):
+        self.button.configure(**kwargs)

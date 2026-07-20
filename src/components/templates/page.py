@@ -1,25 +1,14 @@
-import tkinter as tk
+import customtkinter as ctk
 
-class PageComponent(tk.Frame):
+
+class PageComponent(ctk.CTkFrame):
+    """
+    Base class for standalone pages (not using DefaultLayout).
+
+    Provides a standard CTkFrame base and grid_remove()-based hide mechanism
+    compatible with the App router in routes.py.
+    """
     def __init__(self, parent, *args, **kwargs):
-        """
-        Base class for pages. Each page is a frame with its own widgets.
-        """
+        kwargs.setdefault("corner_radius", 0)
+        kwargs.setdefault("fg_color", "transparent")
         super().__init__(parent, *args, **kwargs)
-        self.widgets = []  # List to store references to all widgets of the page
-
-    def register_widget(self, widget: tk.Widget):
-        """
-        Registers a widget to this page, so it can be hidden or manipulated later.
-        """
-        self.widgets.append(widget)
-
-    def hide(self):
-        """
-        Hides all registered widgets on this page.
-        """
-        for widget in self.widgets:
-            widget.pack_forget()
-            widget.grid_forget()
-            widget.place_forget()
-        self.grid_remove()  # Hides the frame itself

@@ -1,31 +1,213 @@
-import tkinter as tk
+import customtkinter as ctk
+import threading
 from ..templates import DefaultLayout
-from ..atoms import ButtonComponent, TextComponent
+from ..atoms import ButtonComponent
+from ..molecules import InputField
+
 
 class LoginPage(DefaultLayout):
+    """
+    Page: authentication screen.
+
+    Users enter a GitHub PAT and optionally connect Google Drive.
+    On success, navigates to DashboardPage.
+    """
     def __init__(self, parent):
-        super().__init__(parent, title="Login")
+        self._parent = parent
+        super().__init__(parent, title="GameFlow Connect", on_logout=None)
+        self._build_ui()
 
-        # Expande para ocupar toda a tela
-        self.grid_rowconfigure(0, weight=1)
-        self.grid_columnconfigure(0, weight=1)
+    def _build_ui(self) -> None:
+        cf = self.content_frame
+        cf.grid_rowconfigure(0, weight=1)
+        cf.grid_columnconfigure(0, weight=1)
 
-        # Conteúdo específico da página de login
-        login_label = TextComponent("Faça login para continuar", font=("Arial", 24, "bold"))
-        login_label.pack(in_=self.content_frame, pady=20)
+        # ── Outer centering frame ────────────────────────────────────────
+        center = ctk.CTkFrame(cf, fg_color="transparent")
+        center.place(relx=0.5, rely=0.5, anchor="center")
 
-        login_button = ButtonComponent(
-            parent=self.content_frame,
-            label="Entrar",
-            size="medium",
-            onClick=lambda: parent.show_page("DashboardPage"),
+        # ── Card ────────────────────────────────────────────────────────
+        card = ctk.CTkFrame(
+            center,
+            corner_radius=16,
+            border_width=1,
+            border_color="#2d5266",
+            width=420,
         )
-        login_button.pack(pady=10)
+        card.pack()
+        card.grid_columnconfigure(0, weight=1)
 
-        # Centralizar elementos dentro do frame de conteúdo
-        self.content_frame.grid_propagate(False)
-        self.content_frame.grid_rowconfigure(0, weight=1)
-        self.content_frame.grid_columnconfigure(0, weight=1)
+        # Header row
+        header_f = ctk.CTkFrame(card, corner_radius=0, fg_color="#162c38", height=64)
+        header_f.grid(row=0, column=0, sticky="ew")
+        header_f.grid_propagate(False)
+        header_f.grid_columnconfigure(0, weight=1)
 
-        # Adiciona padding para espaçamento
-        self.content_frame.config(padx=20, pady=20)
+        ctk.CTkLabel(
+            header_f,
+            text="⬡  Acesso à Plataforma",
+            font=ctk.CTkFont(family="Arial", size=16, weight="bold"),
+            text_color="#ffffff",
+        ).grid(row=0, column=0, padx=24, pady=18, sticky="w")
+
+        # Body
+        body = ctk.CTkFrame(card, fg_color="transparent")
+        body.grid(row=1, column=0, padx=28, pady=24, sticky="ew")
+        body.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(
+            body,
+            text="Conecte suas contas para continuar",
+            font=ctk.CTkFont(family="Arial", size=12),
+            text_color="gray60",
+        ).grid(row=0, column=0, sticky="w", pady=(0, 20))
+
+        # GitHub token input
+        self._token_field = InputField(
+            body,
+            label="GitHub Personal Access Token",
+            placeholder="ghp_xxxxxxxxxxxxxxxxxxxx",
+            show="*",
+        )
+        self._token_field.grid(row=1, column=0, sticky="ew", pady=(0, 16))
+
+        # GitHub button
+        ButtonComponent(
+            parent=body,
+            label="🐙  Entrar com GitHub Token",
+            size="medium",
+            variant="primary",
+            onClick=self._on_github_login,
+        ).grid(row=2, column=0, sticky="ew", pady=(0, 10))
+
+        # Drive button
+        ButtonComponent(
+            parent=body,
+            label="☁  Conectar Google Drive (OAuth)",
+            size="medium",
+            variant="secondary",
+            onClick=self._on_drive_login,
+        ).grid(row=3, column=0, sticky="ew", pady=(0, 4))
+
+        # Divider
+        ctk.CTkFrame(body, height=1, fg_color="gray30", corner_radius=0).grid(
+            row=4, column=0, sticky="ew", pady=16
+        )
+
+        # Status label
+        self._status = ctk.CTkLabel(
+            body,
+            text="",
+            font=ctk.CTkFont(family="Arial", size=11),
+            text_color="gray60",
+            wraplength=360,
+        )
+        self._status.grid(row=5, column=0, pady=(0, 4))
+
+        # Progress bar (hidden initially)
+        self._progress = ctk.CTkProgressBar(body, mode="indeterminate", height=4)
+        self._progress.grid(row=6, column=0, sticky="ew")
+        self._progress.grid_remove()
+
+        # Footer
+        footer = ctk.CTkFrame(card, corner_radius=0, fg_color="#0f1e26", height=44)
+        footer.grid(row=2, column=0, sticky="ew")
+        footer.grid_propagate(False)
+        footer.grid_columnconfigure(0, weight=1)
+        footer.grid_columnconfigure(1, weight=1)
+
+        ctk.CTkButton(
+            footer,
+            text="← Voltar à página inicial",
+            font=ctk.CTkFont(size=11),
+            fg_color="transparent",
+            text_color="gray50",
+            hover_color="#162c38",
+            command=lambda: self._parent.show_page("HomePage"),
+        ).grid(row=0, column=0, pady=8, padx=16, sticky="w")
+
+        ctk.CTkButton(
+            footer,
+            text="🚀 Experimentar demo",
+            font=ctk.CTkFont(size=11),
+            fg_color="transparent",
+            text_color="#f0a000",
+            hover_color="#162c38",
+            command=self._enter_demo,
+        ).grid(row=0, column=1, pady=8, padx=16, sticky="e")
+
+
+    # ------------------------------------------------------------------ #
+    # Auth handlers
+    # ------------------------------------------------------------------ #
+
+    def _enter_demo(self) -> None:
+        """Activates demo mode and navigates directly to the Dashboard."""
+        from state import AppState
+        AppState.enter_demo()
+        self._parent.show_page("DashboardPage")
+
+    def _on_github_login(self) -> None:
+        from state import AppState
+        from services.git_connection import GitService
+
+        token = self._token_field.get().strip()
+        if not token:
+            self._set_status("Insira um token válido.", "error")
+            return
+
+        self._set_status("Autenticando no GitHub...", "info")
+        self._show_progress(True)
+
+        def run():
+            try:
+                svc = GitService(token=token)
+                AppState.github_token = token
+                AppState.git_service  = svc
+                self.after(0, lambda: self._set_status("GitHub conectado ✓", "success"))
+                self.after(0, self._check_ready)
+            except Exception as e:
+                self.after(0, lambda: self._set_status(f"Erro GitHub: {e}", "error"))
+            finally:
+                self.after(0, lambda: self._show_progress(False))
+
+        threading.Thread(target=run, daemon=True).start()
+
+    def _on_drive_login(self) -> None:
+        from services.drive import DriveService
+        from state import AppState
+
+        self._set_status("Abrindo navegador para Google OAuth...", "info")
+        self._show_progress(True)
+
+        def run():
+            try:
+                svc = DriveService()
+                svc.authenticate()
+                AppState.drive_service = svc
+                self.after(0, lambda: self._set_status("Google Drive conectado ✓", "success"))
+                self.after(0, self._check_ready)
+            except Exception as e:
+                self.after(0, lambda: self._set_status(f"Erro Drive: {e}", "error"))
+            finally:
+                self.after(0, lambda: self._show_progress(False))
+
+        threading.Thread(target=run, daemon=True).start()
+
+    def _check_ready(self) -> None:
+        from state import AppState
+        if AppState.is_fully_connected():
+            self._set_status("Tudo conectado! Entrando...", "success")
+            self.after(600, lambda: self._parent.show_page("DashboardPage"))
+
+    def _set_status(self, msg: str, kind: str = "info") -> None:
+        colors = {"error": "#e74c3c", "success": "#00aa00", "info": "#7fa8c0"}
+        self._status.configure(text=msg, text_color=colors.get(kind, "gray60"))
+
+    def _show_progress(self, show: bool) -> None:
+        if show:
+            self._progress.grid()
+            self._progress.start()
+        else:
+            self._progress.stop()
+            self._progress.grid_remove()

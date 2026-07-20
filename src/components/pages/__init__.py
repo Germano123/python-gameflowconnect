@@ -1,9 +1,6 @@
-# # src/components/pages/__init__.py
-# from .home import home
-# from .login import login
-# from .register import register
-# from .dashboard import dashboard
+from .home import HomePage
+from .login import LoginPage
+from .register import RegisterPage
+from .dashboard import DashboardPage
 
-# __all__ = ["home", "login", "register", "dashboard"]
-
-
+__all__ = ["HomePage", "LoginPage", "RegisterPage", "DashboardPage"]
