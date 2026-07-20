@@ -1,89 +1,141 @@
 # GameFlowConnect
 **A Collaboration Tool for Game Artists, Programmers, and Designers**
 
-GameFlowConnect is a tool designed to facilitate effective collaboration between game artists, programmers, and designers by providing a centralized platform for the exchange and submission of assets within a project. The system is built with Python and leverages the Tkinter UI library for a user-friendly and intuitive experience.
+GameFlowConnect is a tool designed to facilitate effective collaboration between game artists, programmers, and designers by providing a centralized platform for the exchange and submission of assets within a project. The system is built with Python, leveraging **Clean Architecture**, **SOLID principles**, and **CustomTkinter** for a user-friendly and intuitive experience.
 
-## The Problems
-The use of multiple assets in game development projects often involves repetitive tasks. Making minor adjustments and exporting files can be monotonous and time-consuming, creating an additional burden for artists who may lack experience with version control tools.
+---
+
+## 🚀 Recent Progress & Architecture
+
+GameFlowConnect has evolved to a production-ready **Clean Architecture** structure:
+
+* **Domain Layer (`src/domain/`)**: Pure business entities (`Asset`, `ProjectContext`) and enums (`AssetType`, `SyncStatus`), completely decoupled from UI or external APIs.
+* **Use Cases Layer (`src/use_cases/`)**: Application orchestrations (`SyncAssetUseCase`, `ListAssetsUseCase`) depending exclusively on repository abstractions (`IAssetStorageRepository`, `ILocalStorageRepository`) enforcing **Dependency Inversion (DIP)** and **Interface Segregation (ISP)**.
+* **Adapters Layer (`src/adapters/`)**: Concrete implementations for Google Drive API (`GoogleDriveAdapter`), Local File System (`LocalFileAdapter`), and Mock Service (`MockDriveAdapter`) adhering to **Liskov Substitution (LSP)**.
+* **UI / Presentation (`src/components/`)**: Atomic Design UI structure (`atoms`, `molecules`, `organisms`, `pages`, `templates`) with CustomTkinter.
+* **Asset Synchronization Engine (Phase 1: Images)**: Enables seamless image asset sync (`.png`, `.jpg`, `.jpeg`, `.tga`, `.webp`) from Google Drive directly into local Game Engine asset directories (`/Assets/Images/`).
+* **Automated Unit Tests (`tests/`)**: Fully covered unit and integration tests using `unittest` and `unittest.mock`.
+
+---
+
+## 🛠️ Problems & Solutions
 
 ### Version Control Conflicts
-**Problem:** In large game development teams, multiple members often work simultaneously on different parts of the game. This can lead to version control conflicts, especially when merging changes made by different developers. Resolving these conflicts manually can be time-consuming and error-prone.
+* **Problem:** In game development, mixing large binary assets (3D models, textures, audio) with source code in Git leads to repository bloat and merge conflicts.
+* **Solution:** GameFlowConnect establishes a hybrid bridge: **Google Drive** for heavy binary assets and **GitHub** for code and scripts.
 
-### Asset Management and Duplication
-**Problem:** Coordinating the creation and distribution of game assets in large teams can result in duplicated files, inconsistent naming conventions, and difficulty tracking the latest versions. This confusion can hinder overall efficiency.
+---
 
-### Communication Failures
-**Problem:** As teams grow, effective communication becomes more challenging. Team members may miss important updates, changes, or discussions, leading to misunderstandings, duplicated efforts, and project delays.
-
-### Integration Challenges
-**Problem:** Integrating different components developed by various team members can be complex, especially in large teams where specialized work is distributed. Ensuring all game elements function cohesively and without bugs becomes a significant challenge.
-
-### Security and Access Control
-**Problem:** Large teams often include members with diverse roles and responsibilities. Ensuring that sensitive information such as credentials, API keys, or proprietary assets remains secure and accessible only to authorized team members is crucial. Poor access management can lead to data breaches or unauthorized project modifications.
-
-## The Solutions
-GameFlowConnect addresses these challenges by offering an accessible platform for artists to manage version control efficiently.
-
-## Key Features
-1. **Google Drive Integration**
-   The tool allows users to connect their Google Drive accounts, enabling easy and secure storage of project assets. This integration streamlines the process of sharing and accessing files in a collaborative environment.
-
+## 🔑 Key Features
+1. **Google Drive Integration (Cloud Asset Storage)**
+   Enables easy and secure storage, preview, and 1-click sync of game assets directly to local engine folders.
 2. **GitHub Repository Integration**
-   The tool supports GitHub repository integration, providing efficient version control and collaboration among team members. Developers can easily push and pull changes directly through the tool, ensuring a smooth workflow.
+   Provides repository tracking, commit histories, and code management directly within the application.
+3. **Local Game Engine Sync (Unity / Unreal / Godot)**
+   Automatically creates and organizes local asset subdirectories (`Assets/Images`, `Assets/Docs`, `Assets/Models`).
+4. **Clean Architecture & SOLID Design System**
+   Modular, testable, and maintainable codebase built with CustomTkinter.
+5. **Demo Mode (1-Click Test)**
+   Allows offline exploration of all UI features using simulated mock data.
 
-3. **Git Versioning**
-   By default, the system uses Git for version control of project files. This ensures that changes made by different team members are tracked, and the project's history is maintained. Users can commit changes, create branches, and manage merges directly through the tool.
+---
 
-4. **User-Friendly Interface**
-   The graphical user interface (GUI) is developed using the Tkinter library, offering an intuitive and easy-to-use design. The focus is on simplicity and efficiency to enhance the overall collaborative process.
+## 📋 Requirements
+- Python 3.9 or higher
+- Google Drive account
+- GitHub account & [GitHub Personal Access Token (PAT)](https://docs.github.com/en/enterprise-cloud@latest/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-personal-access-token)
+- `credentials.json` (Google OAuth 2.0 Client ID credentials from Google Cloud Console)
 
-## Secondary Features
-1. **Real-Time Collaboration**
-   Enable simultaneous editing and viewing of project files by multiple team members, promoting collaboration and immediate feedback.
+---
 
-2. **Asset Preview and Visualization**
-   Implement a feature to preview and visualize game assets directly within the tool, allowing team members to inspect graphics, models, and other media without external applications.
+## ⚙️ Google Drive Setup Guide (Google Cloud Console)
 
-3. **Task and Issue Tracker**
-   Integrate a system for tracking tasks and issues to help team members assign, monitor, and manage tasks within the tool. This feature streamlines project management and improves communication among team members.
+To connect GameFlowConnect with real Google Drive API storage, follow these setup steps:
 
-4. **Notification System**
-   Develop a notification system to alert users about changes made by collaborators, newly assigned tasks, or important project updates. This enhances communication and keeps everyone informed about project progress.
+### 1. Create a Project in Google Cloud Console
+1. Go to the [Google Cloud Console](https://console.cloud.google.com/).
+2. Click on the project dropdown at the top and select **New Project**.
+3. Name your project (e.g., `GameFlowConnect-Dev`) and click **Create**.
 
-5. **Offline Mode and Syncing**
-   Implement an offline mode that allows users to work on the project without an internet connection. Changes made offline should be automatically synced with the cloud (Google Drive) and repository (GitHub) once the internet connection is restored, ensuring seamless collaboration across environments.
+### 2. Enable the Google Drive API
+1. In the Google Cloud Console, navigate to **APIs & Services > Library**.
+2. Search for **Google Drive API**.
+3. Click on **Google Drive API** and click **Enable**.
 
-## Requirements
-- Python 3.6 or higher
-- Google Drive account (for integration)
-- GitHub account (for integration)
-- [GitHub Personal Access Token](https://docs.github.com/en/enterprise-cloud@latest/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-personal-access-token)
+### 3. Configure OAuth Consent Screen
+1. Navigate to **APIs & Services > OAuth consent screen**.
+2. Select **External** (or Internal if using Google Workspace) and click **Create**.
+3. Fill in required fields:
+   - **App name**: `GameFlowConnect`
+   - **User support email**: Your email address
+   - **Developer contact information**: Your email address
+4. Click **Save and Continue**.
+5. Under **Scopes**, click **Add or Remove Scopes** and select:
+   - `.../auth/drive` (See, edit, create, and delete all of your Google Drive files)
+6. Under **Test users** (if in Testing mode), add the Google email addresses of your team members who will test the application.
 
-## Installation
-1. Clone the GameFlowConnect repository:
+### 4. Create OAuth 2.0 Credentials (`credentials.json`)
+1. Navigate to **APIs & Services > Credentials**.
+2. Click **+ Create Credentials** at the top and select **OAuth client ID**.
+3. Choose **Application type**: **Desktop App**.
+4. Set the **Name** to `GameFlowConnect Client`.
+5. Click **Create**.
+6. A dialog will appear with your Client ID. Click **Download JSON**.
+7. Rename the downloaded file to `credentials.json` and place it in the root directory of `python-gameflowconnect` on each developer/artist machine.
+
+---
+
+## ⚡ Installation & Execution
+
+1. **Clone the repository**:
    ```bash
    git clone https://github.com/Germano123/python-gameflowconnect.git
+   cd python-gameflowconnect
    ```
 
-2. Create virtual environment:
-   ```bash
-   python -m venv myvenv
-   ```
+2. **Create and activate a virtual environment**:
+   - **Windows (PowerShell/CMD)**:
+     ```powershell
+     python -m venv venv
+     .\venv\Scripts\activate
+     ```
+   - **Linux / macOS**:
+     ```bash
+     python3 -m venv venv
+     source venv/bin/activate
+     ```
 
-3. Install the dependencies:
+3. **Install dependencies**:
    ```bash
    pip install -r requirements.txt
    ```
 
-4. Run the tool:
+4. **Add Google OAuth Credentials**:
+   Place your `credentials.json` file in the root directory of the project.
+
+5. **Run the Application**:
+   - **Windows**:
+     ```cmd
+     run.bat
+     ```
+   - **Linux / macOS**:
+     ```bash
+     chmod +x run.sh
+     ./run.sh
+     ```
+   - **Direct Python**:
+     ```bash
+     python src/main.py
+     ```
+
+6. **Run Unit Tests**:
    ```bash
-   python ./src/main.py
+   python -m unittest discover -s tests
    ```
-   Log in with your Google Drive and GitHub credentials.
 
-Navigate through the intuitive features to share, preview, and version control your assets.
+---
 
-## Visual Identity
+## 🎨 Visual Identity
 The project's color scheme consists of:
 
 <div style="display: flex; justify-content: center; align-items: center; height: 100px">
@@ -92,9 +144,7 @@ The project's color scheme consists of:
     <div style="display: flex; justify-content: center; align-items: center; color: white; background-color: #00aa00; width: 180px; height: 100%; margin: 5px; border-radius: 23px"><p>Accent: #00aa00</p></div>
 </div>
 
-## Contributions
-Contributions are welcome! Please refer to CONTRIBUTING.md for details on how to contribute to the project.
+---
 
-## Suggestions
-Leave your feature suggestions in the [issues](https://github.com/Germano123/python-gameflowconnect/issues).
-
+## 🤝 Contributions
+Contributions are welcome! Please refer to `CONTRIBUTING.md` for details on how to contribute to the project.

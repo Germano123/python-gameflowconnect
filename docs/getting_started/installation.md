@@ -1,88 +1,80 @@
-# **Getting Started**
+# **Getting Started: Installation & Setup**
 
-Welcome to GameFlow Connect! This guide will help you set up and start using the application. For now, this document will remain high-level, providing basic instructions and an overview of the setup process.
+Welcome to GameFlow Connect! This guide will help you set up and start using the application.
 
-## **Installation**
+---
 
-1. **Install Python**:
+## **1. Prerequisites**
 
-    - Ensure you have Python 3.9 or above installed on your system. You can download it from [python.org](https://www.python.org/downloads/).
+- **Python Version**: Python 3.9 or higher installed on your system ([python.org](https://www.python.org/downloads/)).
+- **Git**: Installed for repository management ([git-scm.com](https://git-scm.com/)).
+- **Google Drive Account**: For cloud asset storage.
+- **GitHub Account & Token**: Personal Access Token (PAT) for repository integration.
 
-2. **Install Tkinter**:
+---
 
-    - Tkinter is bundled with most Python installations. Verify its availability by running:
-    
-    ```bash
-    python -m tkinter
-    ```
-    
-    - If it's missing, follow your operating system's specific instructions to install it.
+## **2. Installation Steps**
 
-3. **Clone the Repository**:
+1. **Clone the Repository**:
+   ```bash
+   git clone https://github.com/Germano123/python-gameflowconnect.git
+   cd python-gameflowconnect
+   ```
 
-    - Clone the GameFlow Connect repository from GitHub:
-    
-    ```bash
-    git clone https://github.com/Germano123/python-gameflowconnect.git
-    ```
+2. **Create a Virtual Environment**:
+   - **Windows**:
+     ```powershell
+     python -m venv venv
+     .\venv\Scripts\activate
+     ```
+   - **Linux / macOS**:
+     ```bash
+     python3 -m venv venv
+     source venv/bin/activate
+     ```
 
-4. **Create a virtual environment (Opcional)**:
-    > Although this is opcional, we recommend creating a virtual env.
+3. **Install Dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-    ```bash
-    python -m venv venv
-    ```
+---
 
-    - On Linux/MacOS
-    
-    ```bash
-    source venv/bin/activate 
-    ```
+## **3. Google Drive OAuth Setup (`credentials.json`)**
 
-    - On Windows
+To connect with your Google Drive account, you need an OAuth 2.0 Client ID file (`credentials.json`):
 
-    ```bash
-    venv\\Scripts\\activate 
-    ```
+1. Go to the [Google Cloud Console](https://console.cloud.google.com/).
+2. Create a **New Project** (e.g., `GameFlowConnect`).
+3. Under **APIs & Services > Library**, enable the **Google Drive API**.
+4. Under **APIs & Services > OAuth consent screen**, set up the consent screen:
+   - App Name: `GameFlowConnect`
+   - Scope: `https://www.googleapis.com/auth/drive`
+   - Add your Google account email under **Test Users**.
+5. Under **APIs & Services > Credentials**, click **+ Create Credentials > OAuth client ID**:
+   - Application Type: **Desktop App**
+6. Download the generated OAuth client JSON file, rename it to `credentials.json`, and place it in the root folder of `python-gameflowconnect`.
 
-5. **Install Dependencies**:
+---
 
-    - Navigate to the project directory and install required Python packages:
-    ```bash
-    cd python-gameflowconnect
-    pip install -r requirements.txt
-    ```
+## **4. Running the Application**
 
-## **Usage**
+Run the following command to start GameFlow Connect:
 
-1. **Launch the Application**:
+```bash
+python src/main.py
+```
 
-    - Run the following command to start GameFlow Connect:
-    ```bash
-    python src/main.py
-    ```
+Or use the provided launcher scripts:
+- **Windows**: `run.bat`
+- **Linux/macOS**: `./run.sh`
 
-2. **Explore the Interface**:
-    - Navigate through the interface to familiarize yourself with features like file management, GitHub integration, and Google Drive tools.
+---
 
-## **Requirements**
+## **5. Running Automated Tests**
 
-- **Operating System**:
+To verify your installation and test all domain entities and use cases:
 
-  - Windows, macOS, or Linux
-
-- **Python Version**:
-
-  - 3.9 or higher
-
-- **Additional Tools**:
-
-  - Git
-  - Google Drive account (for integration)
-  - GitHub account (for repository management)
-
-## **What's Next?**
-
-Once you've set up the application, you can start exploring its core features. Refer to the [Core Features](../features/1_core_features.md) section for a detailed walkthrough.
-
-Stay tuned for more updates as the project evolves!
+```bash
+python -m unittest discover -s tests
+```
