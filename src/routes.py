@@ -11,6 +11,10 @@ from components.pages.home import HomePage
 from components.pages.login import LoginPage
 from components.pages.register import RegisterPage
 from components.pages.dashboard import DashboardPage
+from components.pages.projects import ProjectsPage
+from components.pages.integrations import IntegrationsPage
+from components.pages.settings import SettingsPage
+from components.pages.profile import ProfilePage
 
 # ------------------------------------------------------------------ #
 # Global CTk theme configuration
@@ -55,13 +59,18 @@ class App(ctk.CTk):
         self.current_page: str | None = None
 
         # Register all pages
-        self.register_page("HomePage",      HomePage)
-        self.register_page("LoginPage",     LoginPage)
-        self.register_page("RegisterPage",  RegisterPage)
-        self.register_page("DashboardPage", DashboardPage)
+        self.register_page("HomePage",         HomePage)
+        self.register_page("LoginPage",        LoginPage)
+        self.register_page("RegisterPage",     RegisterPage)
+        self.register_page("DashboardPage",    DashboardPage)
+        self.register_page("ProjectsPage",     ProjectsPage)
+        self.register_page("IntegrationsPage", IntegrationsPage)
+        self.register_page("SettingsPage",     SettingsPage)
+        self.register_page("ProfilePage",      ProfilePage)
 
         # Show initial page
         self.show_page("HomePage")
+
 
     def register_page(self, name: str, page_class: Type[ctk.CTkFrame]) -> None:
         """

@@ -28,3 +28,49 @@ class TextComponent(ctk.CTkLabel):
             kwargs.setdefault("text_color", kwargs.pop("fg"))
 
         super().__init__(parent, text=content, font=ctk_font, **kwargs)
+
+
+class TitleText(TextComponent):
+    """Convenience atom for section/page titles."""
+    def __init__(self, parent, text: str, **kwargs):
+        kwargs.setdefault("font", ("Arial", 16, "bold"))
+        kwargs.setdefault("text_color", "#ffffff")
+        super().__init__(parent, content=text, **kwargs)
+
+
+class SubtitleText(TextComponent):
+    """Convenience atom for subtitles and secondary headers."""
+    def __init__(self, parent, text: str, **kwargs):
+        kwargs.setdefault("font", ("Arial", 12))
+        kwargs.setdefault("text_color", "gray60")
+        super().__init__(parent, content=text, **kwargs)
+
+
+class BodyText(TextComponent):
+    """Convenience atom for regular body text."""
+    def __init__(self, parent, text: str, **kwargs):
+        kwargs.setdefault("font", ("Arial", 11))
+        kwargs.setdefault("text_color", "#a0b8c8")
+        super().__init__(parent, content=text, **kwargs)
+
+
+class CaptionText(TextComponent):
+    """Convenience atom for small captions."""
+    def __init__(self, parent, text: str, **kwargs):
+        kwargs.setdefault("font", ("Arial", 10))
+        kwargs.setdefault("text_color", "gray50")
+        super().__init__(parent, content=text, **kwargs)
+
+
+class StatusBadge(ctk.CTkFrame):
+    """Atom component: pill badge for status indicators."""
+    def __init__(self, parent, text: str, bg_color: str = "#1e3743", text_color: str = "#00aa00", **kwargs):
+        kwargs.setdefault("corner_radius", 6)
+        kwargs.setdefault("fg_color", bg_color)
+        super().__init__(parent, **kwargs)
+        ctk.CTkLabel(
+            self,
+            text=text,
+            font=ctk.CTkFont(family="Arial", size=10, weight="bold"),
+            text_color=text_color,
+        ).pack(padx=8, pady=2)
