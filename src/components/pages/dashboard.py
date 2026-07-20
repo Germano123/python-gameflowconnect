@@ -190,12 +190,20 @@ class DashboardPage(DefaultLayout):
 
     def _load_drive(self) -> None:
         from state import AppState
+        from use_cases import ListAssetsUseCase
+        from domain import AssetType
+
         if not AppState.is_drive_connected():
             self.after(0, lambda: self._render_empty(self._drive_scroll, "Drive não conectado.\nFaça login para conectar."))
             return
         try:
-            files = AppState.drive_service.list_files(page_size=20)
-            self.after(0, lambda: self._render_drive(files))
+            storage_repo = AppState.get_storage_repository()
+            local_repo = AppState.get_local_repository()
+            list_use_case = ListAssetsUseCase(remote_repo=storage_repo, local_repo=local_repo)
+            
+            # Sincronização e exibição focada inicialmente em Imagens (Fase 1)
+            assets = list_use_case.execute(asset_type=AssetType.IMAGE)
+            self.after(0, lambda: self._render_drive(assets))
         except Exception as e:
             self.after(0, lambda: self._render_empty(self._drive_scroll, f"Erro: {e}"))
 
@@ -210,10 +218,10 @@ class DashboardPage(DefaultLayout):
             self.after(0, lambda: self._render_github(repos))
             if AppState.demo_mode:
                 self.after(0, lambda: self._status_lbl.configure(
-                    text="🚀  Demo — dados de exemplo  ·  8 repositórios simulados"
+                    text="🚀 Demo — dados de exemplo · 8 repositórios simulados"
                 ))
             else:
-                self.after(0, lambda: self._status_lbl.configure(text=f"Conectado como  @{username}"))
+                self.after(0, lambda: self._status_lbl.configure(text=f"Conectado como @{username}"))
         except Exception as e:
             self.after(0, lambda: self._render_empty(self._git_scroll, f"Erro: {e}"))
 
@@ -221,23 +229,45 @@ class DashboardPage(DefaultLayout):
     # Renderers
     # ------------------------------------------------------------------ #
 
-    def _render_drive(self, files: list) -> None:
+    def _render_drive(self, assets: list) -> None:
         self._clear(self._drive_scroll)
-        if not files:
-            self._render_empty(self._drive_scroll, "Nenhum arquivo encontrado.")
+        if not assets:
+            self._render_empty(self._drive_scroll, "Nenhum asset de imagem encontrado.")
             return
-        for file in files:
-            size_bytes = file.get("size")
-            size_str   = self._fmt_size(int(size_bytes)) if size_bytes else None
-            modified   = (file.get("modifiedTime") or "")[:10]
+        for asset in assets:
             card = FileCard(
                 self._drive_scroll,
-                name=file.get("name", "—"),
-                mime_type=file.get("mimeType", "application/octet-stream"),
-                size=size_str,
-                modified=modified,
+                name=asset.name,
+                mime_type=asset.mime_type or "image/png",
+                size=asset.formatted_size,
+                modified=(asset.modified_time or "")[:10],
+                status_text=asset.status.name if hasattr(asset.status, 'name') else str(asset.status),
+                on_sync=lambda a=asset: self._sync_asset(a),
             )
             card.pack(fill="x", padx=4, pady=3)
+
+    def _sync_asset(self, asset) -> None:
+        from state import AppState
+        from use_cases import SyncAssetUseCase
+
+        self._status_lbl.configure(text=f"Sincronizando {asset.name}...")
+
+        def run():
+            try:
+                storage_repo = AppState.get_storage_repository()
+                local_repo = AppState.get_local_repository()
+                sync_use_case = SyncAssetUseCase(remote_repo=storage_repo, local_repo=local_repo)
+                saved_path = sync_use_case.download_to_engine(asset)
+
+                self.after(0, lambda: self._status_lbl.configure(
+                    text=f"✓ Sincronizado: {asset.name} em {saved_path}"
+                ))
+                self.after(800, self._refresh_all)
+            except Exception as e:
+                self.after(0, lambda: self._status_lbl.configure(text=f"Erro sync: {e}"))
+
+        threading.Thread(target=run, daemon=True).start()
+
 
     def _render_github(self, repos: list) -> None:
         self._clear(self._git_scroll)

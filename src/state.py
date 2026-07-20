@@ -47,6 +47,29 @@ class AppState:
     demo_mode: bool = False
 
     # ------------------------------------------------------------------ #
+    # Repository Factories (Clean Architecture DIP / LSP)
+    # ------------------------------------------------------------------ #
+
+    @classmethod
+    def get_storage_repository(cls):
+        """Returns the IAssetStorageRepository implementation based on current state."""
+        from adapters.google_drive_adapter import GoogleDriveAdapter
+        from adapters.mock_drive_adapter import MockDriveAdapter
+
+        if cls.demo_mode:
+            return MockDriveAdapter(cls.drive_service)
+        return GoogleDriveAdapter(cls.drive_service)
+
+    @classmethod
+    def get_local_repository(cls):
+        """Returns the ILocalStorageRepository implementation for the current local_project_path."""
+        import os
+        from adapters.local_file_adapter import LocalFileAdapter
+
+        path = cls.local_project_path or os.path.abspath("./GameProject")
+        return LocalFileAdapter(path)
+
+    # ------------------------------------------------------------------ #
     # Status checks
     # ------------------------------------------------------------------ #
 
@@ -58,7 +81,10 @@ class AppState:
     @classmethod
     def is_drive_connected(cls) -> bool:
         """Returns True if a DriveService is authenticated and available."""
-        return cls.drive_service is not None
+        if cls.demo_mode:
+            return True
+        return cls.drive_service is not None and getattr(cls.drive_service, "is_authenticated", False)
+
 
     @classmethod
     def is_fully_connected(cls) -> bool:
@@ -101,3 +127,4 @@ class AppState:
         cls.current_drive_folder_id = None
         cls.local_project_path      = None
         cls.demo_mode              = False
+

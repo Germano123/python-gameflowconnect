@@ -80,9 +80,16 @@ class MockDriveService:
 
     def download_file(self, file_id: str, destination_path: str) -> str:
         """Simulates a file download."""
+        import os
         import time
-        time.sleep(0.6)
+        time.sleep(0.1)
+        parent_dir = os.path.dirname(destination_path)
+        if parent_dir:
+            os.makedirs(parent_dir, exist_ok=True)
+        with open(destination_path, "wb") as f:
+            f.write(b"MOCK_IMAGE_DATA")
         return destination_path
+
 
 
 # ------------------------------------------------------------------ #

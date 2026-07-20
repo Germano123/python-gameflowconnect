@@ -196,9 +196,10 @@ class LoginPage(DefaultLayout):
 
     def _check_ready(self) -> None:
         from state import AppState
-        if AppState.is_fully_connected():
-            self._set_status("Tudo conectado! Entrando...", "success")
+        if AppState.is_drive_connected() or AppState.is_github_connected():
+            self._set_status("Conexão realizada com sucesso! Entrando...", "success")
             self.after(600, lambda: self._parent.show_page("DashboardPage"))
+
 
     def _set_status(self, msg: str, kind: str = "info") -> None:
         colors = {"error": "#e74c3c", "success": "#00aa00", "info": "#7fa8c0"}

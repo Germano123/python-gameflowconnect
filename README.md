@@ -67,7 +67,7 @@ GameFlowConnect addresses these challenges by offering an accessible platform fo
 
 2. Create virtual environment:
    ```bash
-   python -m venv myven
+   python -m venv myvenv
    ```
 
 3. Install the dependencies:
@@ -77,7 +77,7 @@ GameFlowConnect addresses these challenges by offering an accessible platform fo
 
 4. Run the tool:
    ```bash
-   python ./main.py
+   python ./src/main.py
    ```
    Log in with your Google Drive and GitHub credentials.
 
