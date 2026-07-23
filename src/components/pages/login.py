@@ -149,7 +149,11 @@ class LoginPage(DefaultLayout):
                     svc = DriveService()
                     svc.authenticate()
                     AppState.drive_service = svc
-                    AppState.user_email = profile.email
+                    try:
+                        AppState.user_email = svc.get_user_email()
+                    except Exception:
+                        AppState.user_email = profile.email
+
                     self.after(0, lambda: self._set_status("Google Drive reconectado ✓", "success"))
 
                     # 2. Reconectar GitHub (se houver token salvo)
@@ -212,8 +216,13 @@ class LoginPage(DefaultLayout):
                 svc = DriveService()
                 svc.authenticate()
                 AppState.drive_service = svc
+                try:
+                    AppState.user_email = svc.get_user_email()
+                except Exception:
+                    pass
                 self.after(0, lambda: self._set_status("Google Drive conectado ✓", "success"))
                 self.after(0, self._check_ready)
+
             except Exception as e:
                 err_msg = str(e)
                 self.after(0, lambda msg=err_msg: self._set_status(f"Erro Drive: {msg}", "error"))

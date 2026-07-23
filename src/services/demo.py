@@ -115,6 +115,10 @@ class MockDriveService:
     def find_file_in_folder(self, folder_id: str, filename: str) -> Optional[str]:
         return "meta_file_123"
 
+    def get_user_email(self) -> str:
+        return "user@gameflow.io"
+
+
 
 
 

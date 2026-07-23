@@ -226,3 +226,16 @@ class DriveService:
             raise RuntimeError(
                 "DriveService is not authenticated. Call authenticate() first."
             )
+
+    def get_user_email(self) -> str:
+        """
+        Retorna o e-mail do usuário autenticado no Google Drive.
+        """
+        self._require_auth()
+        try:
+            about = self._service.about().get(fields="user(emailAddress)").execute()
+            return about.get("user", {}).get("emailAddress", "")
+        except Exception as e:
+            print(f"Erro ao obter e-mail do Google Drive: {e}")
+            return "user@gameflow.io"
+
