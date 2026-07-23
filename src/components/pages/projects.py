@@ -85,7 +85,7 @@ class ProjectsPage(DefaultLayout):
         )
         self._proj_desc_lbl.pack(anchor="w", pady=(2, 0))
 
-        # Project Action Toolbar (Invite members & Add asset)
+        # Project Action Toolbar (Invite members & Add asset & Delete)
         self._proj_actions_frame = ctk.CTkFrame(right_panel, fg_color="transparent")
         self._proj_actions_frame.grid(row=1, column=0, sticky="ew", padx=16, pady=(0, 10))
 
@@ -105,12 +105,35 @@ class ProjectsPage(DefaultLayout):
             onClick=self._upload_asset_to_project,
         ).pack(side="left")
 
+        ButtonComponent(
+            parent=self._proj_actions_frame,
+            label="🗑️  Excluir Projeto",
+            size="small",
+            variant="danger",
+            onClick=self._delete_project_action,
+        ).pack(side="right")
+
         # Project Assets Scroll
         self._assets_scroll = ctk.CTkScrollableFrame(right_panel, fg_color="transparent")
         self._assets_scroll.grid(row=2, column=0, sticky="nsew", padx=6, pady=6)
 
+
     def on_show(self) -> None:
         self._refresh_projects()
+        # Executar descoberta de projetos compartilhados em background
+        threading.Thread(target=self._discover_shared, daemon=True).start()
+
+    def _discover_shared(self) -> None:
+        from state import AppState
+        from use_cases import ProjectManagerUseCase
+        if AppState.is_drive_connected():
+            try:
+                manager = ProjectManagerUseCase()
+                discovered = manager.discover_shared_projects(AppState.user_email, AppState.drive_service)
+                if discovered:
+                    self.after(0, self._refresh_projects)
+            except Exception as e:
+                print(f"Erro na descoberta em background: {e}")
 
     def _refresh_projects(self) -> None:
         from use_cases import ProjectManagerUseCase
@@ -166,7 +189,6 @@ class ProjectsPage(DefaultLayout):
         members_str = ", ".join(proj.members) if proj.members else proj.owner
         self._proj_desc_lbl.configure(text=f"{proj.description}\nMembros: {members_str}")
         self._refresh_project_assets(proj)
-        self._refresh_projects()
 
     def _refresh_project_assets(self, proj) -> None:
         for w in self._assets_scroll.winfo_children():
@@ -207,13 +229,19 @@ class ProjectsPage(DefaultLayout):
         desc_in.pack(padx=20, pady=6, fill="x")
 
         def save():
+            from state import AppState
             name = name_in.get().strip()
             desc = desc_in.get().strip()
             if not name:
                 return
             from use_cases import ProjectManagerUseCase
             manager = ProjectManagerUseCase()
-            manager.create_project(name=name, description=desc)
+            manager.create_project(
+                name=name,
+                description=desc,
+                owner=AppState.user_email,
+                drive_service=AppState.drive_service
+            )
             modal.destroy()
             self._refresh_projects()
 
@@ -232,12 +260,13 @@ class ProjectsPage(DefaultLayout):
         email_in.pack(padx=20, pady=6, fill="x")
 
         def invite():
+            from state import AppState
             email = email_in.get().strip()
             if not email:
                 return
             from use_cases import ProjectManagerUseCase
             manager = ProjectManagerUseCase()
-            manager.share_project(self._selected_project_id, email)
+            manager.share_project(self._selected_project_id, email, AppState.drive_service)
             modal.destroy()
             proj = manager.get_project_by_id(self._selected_project_id)
             if proj:
@@ -254,13 +283,19 @@ class ProjectsPage(DefaultLayout):
 
         name = path.replace("\\", "/").split("/")[-1]
         from domain import Asset
+        from state import AppState
         from use_cases import ProjectManagerUseCase
 
         manager = ProjectManagerUseCase()
         new_asset = Asset(name=name, local_path=path, size=1024 * 50)
 
         # Add to project and emit visual alert
-        notif = manager.notify_asset_added(self._selected_project_id, "Artista (Você)", new_asset)
+        notif = manager.notify_asset_added(
+            self._selected_project_id,
+            AppState.user_email,
+            new_asset,
+            AppState.drive_service
+        )
 
         # Show visual alert dialog on upload
         ModalDialog(
@@ -274,7 +309,27 @@ class ProjectsPage(DefaultLayout):
         if proj:
             self._refresh_project_assets(proj)
 
+    def _delete_project_action(self) -> None:
+        if not self._selected_project_id:
+            return
+        
+        def do_delete():
+            from use_cases import ProjectManagerUseCase
+            manager = ProjectManagerUseCase()
+            manager.delete_project(self._selected_project_id)
+            self._selected_project_id = None
+            self._refresh_projects()
+
+        ModalDialog(
+            self._parent,
+            title="Confirmar Exclusão",
+            message="Deseja excluir permanentemente este projeto do banco de dados local?",
+            on_confirm=do_delete,
+            confirm_label="Excluir",
+        )
+
     def _on_logout(self) -> None:
         from state import AppState
         AppState.clear()
         self._parent.show_page("HomePage")
+

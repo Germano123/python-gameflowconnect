@@ -90,6 +90,32 @@ class MockDriveService:
             f.write(b"MOCK_IMAGE_DATA")
         return destination_path
 
+    def create_folder(self, folder_name: str, parent_folder_id: Optional[str] = None) -> str:
+        return "demo_folder_123"
+
+    def share_folder(self, folder_id: str, email: str, role: str = "writer") -> dict:
+        return {"id": "permission_123"}
+
+    def search_shared_projects(self) -> list[dict]:
+        return [{"id": "meta_file_123", "name": "project_metadata.json", "parents": ["demo_folder_123"]}]
+
+    def read_json_file(self, file_id: str) -> dict:
+        return {
+            "id": "proj_demo",
+            "name": "Cyberpunk RPG (Demo)",
+            "description": "Projeto simulado compartilhado pelo Drive",
+            "owner": "artist_demo@gameflow.io",
+            "members": ["user@gameflow.io", "artist_demo@gameflow.io"],
+            "assets": []
+        }
+
+    def write_json_file(self, folder_id: str, filename: str, content: dict, file_id: Optional[str] = None) -> str:
+        return file_id or "meta_file_123"
+
+    def find_file_in_folder(self, folder_id: str, filename: str) -> Optional[str]:
+        return "meta_file_123"
+
+
 
 
 # ------------------------------------------------------------------ #

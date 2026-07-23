@@ -26,6 +26,7 @@ class Project:
     name: str
     description: str
     owner: str
+    drive_folder_id: str
     members: List[str] = field(default_factory=list)
     assets: List[Asset] = field(default_factory=list)
     local_path: Optional[str] = None

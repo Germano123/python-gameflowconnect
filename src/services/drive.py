@@ -1,13 +1,8 @@
 """
 DriveService — Encapsulates all Google Drive API interactions.
-
-Usage:
-    service = DriveService()
-    service.authenticate()
-    files = service.list_files()
-    file_id = service.upload_file("path/to/asset.png")
 """
 import os
+import json
 from typing import Optional
 
 from google.auth.transport.requests import Request
@@ -15,9 +10,8 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-from googleapiclient.http import MediaFileUpload
+from googleapiclient.http import MediaFileUpload, MediaInMemoryUpload
 
-# Full Drive scope — if modifying, delete token.json.
 SCOPES = ["https://www.googleapis.com/auth/drive"]
 
 TOKEN_PATH = "token.json"
@@ -39,12 +33,6 @@ class DriveService:
     def authenticate(self) -> bool:
         """
         Authenticates the user via OAuth2.
-
-        Loads existing credentials from `token.json` if available,
-        refreshes them if expired, or launches the OAuth consent flow.
-
-        Returns:
-            bool: True if authentication was successful.
         """
         creds = None
         if os.path.exists(TOKEN_PATH):
@@ -58,7 +46,6 @@ class DriveService:
                 try:
                     creds.refresh(Request())
                 except Exception:
-                    # If invalid_grant or token expired/revoked, remove stale token.json and reset
                     if os.path.exists(TOKEN_PATH):
                         try:
                             os.remove(TOKEN_PATH)
@@ -84,10 +71,8 @@ class DriveService:
         self._service = build("drive", "v3", credentials=self._creds)
         return True
 
-
     @property
     def is_authenticated(self) -> bool:
-        """Returns True if the service has valid credentials."""
         return self._creds is not None and self._creds.valid
 
     # ------------------------------------------------------------------ #
@@ -95,19 +80,6 @@ class DriveService:
     # ------------------------------------------------------------------ #
 
     def list_files(self, page_size: int = 20) -> list[dict]:
-        """
-        Lists files in the user's Google Drive.
-
-        Args:
-            page_size (int): Maximum number of files to return.
-
-        Returns:
-            list[dict]: A list of dicts with 'id', 'name', 'mimeType', 'size'.
-
-        Raises:
-            RuntimeError: If not authenticated.
-            HttpError: On API failure.
-        """
         self._require_auth()
         try:
             results = (
@@ -127,21 +99,6 @@ class DriveService:
             )
 
     def upload_file(self, local_path: str, drive_folder_id: Optional[str] = None) -> str:
-        """
-        Uploads a local file to Google Drive.
-
-        Args:
-            local_path (str): The absolute or relative path to the file to upload.
-            drive_folder_id (str, optional): The ID of the Drive folder to upload into.
-
-        Returns:
-            str: The file ID of the uploaded file.
-
-        Raises:
-            FileNotFoundError: If `local_path` does not exist.
-            RuntimeError: If not authenticated.
-            HttpError: On API failure.
-        """
         self._require_auth()
         if not os.path.exists(local_path):
             raise FileNotFoundError(f"File not found: {local_path}")
@@ -167,20 +124,6 @@ class DriveService:
             )
 
     def download_file(self, file_id: str, destination_path: str) -> str:
-        """
-        Downloads a file from Google Drive.
-
-        Args:
-            file_id (str): The Drive file ID to download.
-            destination_path (str): Local path to save the downloaded file.
-
-        Returns:
-            str: The destination path where the file was saved.
-
-        Raises:
-            RuntimeError: If not authenticated.
-            HttpError: On API failure.
-        """
         self._require_auth()
         try:
             request = self._service.files().get_media(fileId=file_id)
@@ -195,11 +138,86 @@ class DriveService:
             )
 
     # ------------------------------------------------------------------ #
+    # Shared Project & Folder Management (Decentralized Sync)
+    # ------------------------------------------------------------------ #
+
+    def create_folder(self, folder_name: str, parent_folder_id: Optional[str] = None) -> str:
+        self._require_auth()
+        file_metadata = {
+            "name": folder_name,
+            "mimeType": "application/vnd.google-apps.folder"
+        }
+        if parent_folder_id:
+            file_metadata["parents"] = [parent_folder_id]
+
+        file = self._service.files().create(body=file_metadata, fields="id").execute()
+        return file.get("id")
+
+    def share_folder(self, folder_id: str, email: str, role: str = "writer") -> dict:
+        self._require_auth()
+        user_permission = {
+            "type": "user",
+            "role": role,
+            "emailAddress": email
+        }
+        return self._service.permissions().create(
+            fileId=folder_id,
+            body=user_permission,
+            fields="id"
+        ).execute()
+
+    def search_shared_projects(self) -> list[dict]:
+        """
+        Searches for shared folders that contain 'project_metadata.json' shared with the user.
+        """
+        self._require_auth()
+        query = "name = 'project_metadata.json' and sharedWithMe = true"
+        results = self._service.files().list(q=query, fields="files(id, name, parents)").execute()
+        return results.get("files", [])
+
+    def read_json_file(self, file_id: str) -> dict:
+        self._require_auth()
+        request = self._service.files().get_media(fileId=file_id)
+        content_bytes = request.execute()
+        return json.loads(content_bytes.decode("utf-8"))
+
+    def write_json_file(self, folder_id: str, filename: str, content: dict, file_id: Optional[str] = None) -> str:
+        self._require_auth()
+        media = MediaInMemoryUpload(
+            json.dumps(content, indent=2).encode("utf-8"),
+            mimetype="application/json"
+        )
+        if file_id:
+            self._service.files().update(
+                fileId=file_id,
+                media_body=media,
+                fields="id"
+            ).execute()
+            return file_id
+        else:
+            file_metadata = {
+                "name": filename,
+                "parents": [folder_id]
+            }
+            file = self._service.files().create(
+                body=file_metadata,
+                media_body=media,
+                fields="id"
+            ).execute()
+            return file.get("id")
+
+    def find_file_in_folder(self, folder_id: str, filename: str) -> Optional[str]:
+        self._require_auth()
+        query = f"'{folder_id}' in parents and name = '{filename}' and trashed = false"
+        results = self._service.files().list(q=query, fields="files(id, name)").execute()
+        files = results.get("files", [])
+        return files[0].get("id") if files else None
+
+    # ------------------------------------------------------------------ #
     # Internal helpers
     # ------------------------------------------------------------------ #
 
     def _require_auth(self) -> None:
-        """Raises RuntimeError if the service is not authenticated."""
         if not self._service:
             raise RuntimeError(
                 "DriveService is not authenticated. Call authenticate() first."

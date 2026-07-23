@@ -33,6 +33,8 @@ class AppState:
 
     # Authentication credentials
     github_token: Optional[str] = None
+    user_email: str = "user@gameflow.io"
+
 
     # Service instances (set after successful authentication)
     git_service:   Optional["GitService"]   = None
