@@ -78,59 +78,8 @@ class HomePage(ctk.CTkFrame):
             variant="success",
             width=260,
             onClick=lambda: parent.show_page("LoginPage"),
-        ).grid(row=5, column=0, pady=(28, 10))
+        ).grid(row=5, column=0, pady=(28, 36))
 
-        # ── Secondary action: Demo mode ──────────────────────────────────
-        demo_frame = ctk.CTkFrame(card, fg_color="#0f1e26", corner_radius=10)
-        demo_frame.grid(row=6, column=0, padx=40, pady=(0, 8), sticky="ew")
-        demo_frame.grid_columnconfigure(0, weight=1)
-
-        ctk.CTkLabel(
-            demo_frame,
-            text="✦  Sem conta? Explore sem configurar nada.",
-            font=ctk.CTkFont(family="Arial", size=11, weight="bold"),
-            text_color="#f0c040",
-        ).grid(row=0, column=0, padx=16, pady=(12, 4))
-
-        ctk.CTkLabel(
-            demo_frame,
-            text="Acesse um dashboard completo com dados de exemplo\n"
-                 "para avaliar a ferramenta antes de criar sua conta.",
-            font=ctk.CTkFont(family="Arial", size=10),
-            text_color="#8a9ab0",
-            justify="center",
-        ).grid(row=1, column=0, padx=16, pady=(0, 10))
-
-        ctk.CTkButton(
-            demo_frame,
-            text="🚀  Experimentar em Modo Demo",
-            font=ctk.CTkFont(family="Arial", size=12, weight="bold"),
-            fg_color="#f0a000",
-            hover_color="#c88000",
-            text_color="#0f1e26",
-            corner_radius=8,
-            height=38,
-            command=lambda: self._enter_demo(parent),
-        ).grid(row=2, column=0, padx=16, pady=(0, 14), sticky="ew")
-
-        # ── Footer: first-time setup link ────────────────────────────────
-        ctk.CTkButton(
-            card,
-            text="Primeira vez? Criar configuração inicial",
-            font=ctk.CTkFont(family="Arial", size=11),
-            fg_color="transparent",
-            text_color="#7fa8c0",
-            hover_color="#1a3040",
-            command=lambda: parent.show_page("RegisterPage"),
-        ).grid(row=7, column=0, pady=(0, 28))
-
-    # ------------------------------------------------------------------ #
-
-    def _enter_demo(self, parent) -> None:
-        """Activates demo mode and navigates to the Dashboard."""
-        from state import AppState
-        AppState.enter_demo()
-        parent.show_page("DashboardPage")
 
     def _draw_bg(self, canvas) -> None:
         """Draws subtle decorative circles on the background canvas."""

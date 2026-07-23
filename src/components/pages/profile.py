@@ -36,14 +36,6 @@ class ProfilePage(DefaultLayout):
 
         TitleText(left_panel, text="👤 Perfil da Conta").grid(row=0, column=0, padx=20, pady=(20, 10), sticky="w")
         
-        self._email_lbl = ctk.CTkLabel(
-            left_panel,
-            text="E-mail: verificando...",
-            font=ctk.CTkFont(family="Arial", size=13, weight="bold"),
-            text_color="#ffffff"
-        )
-        self._email_lbl.grid(row=1, column=0, padx=20, pady=6, sticky="w")
-
         # Editáveis
         self._username_in = InputField(left_panel, label="Nome de Usuário", placeholder="Ex: Artista 2D")
         self._username_in.grid(row=2, column=0, padx=20, pady=8, sticky="ew")
@@ -85,18 +77,18 @@ class ProfilePage(DefaultLayout):
         from state import AppState
         from use_cases import UserProfileUseCase
 
-        self._email_lbl.configure(text=f"E-mail Ativo: {AppState.user_email}")
-
         # Carregar perfil do SQLite local
         uc = UserProfileUseCase()
-        profile = uc.get_profile(AppState.user_email)
+        email_key = AppState.user_email or "local_user"
+        profile = uc.get_profile(email_key)
         if not profile:
             # Perfil padrão inicial
-            profile = uc.save_profile(AppState.user_email, username="Usuário GameFlow", bio="")
+            profile = uc.save_profile(email_key, username="Usuário GameFlow", bio="")
 
         self._username_in.set(profile.username)
         self._bio_in.set(profile.bio)
         self._github_token_in.set(profile.github_token or "")
+
 
         self._refresh_invitations()
 
@@ -113,7 +105,9 @@ class ProfilePage(DefaultLayout):
             return
 
         uc = UserProfileUseCase()
-        uc.save_profile(AppState.user_email, username, bio, git_token)
+        email_key = AppState.user_email or "local_user"
+        uc.save_profile(email_key, username, bio, git_token)
+
 
         # Se houver alteração de token do GitHub, atualiza na sessão ativa
         if git_token:

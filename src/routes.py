@@ -9,7 +9,6 @@ from typing import Type
 
 from components.pages.home import HomePage
 from components.pages.login import LoginPage
-from components.pages.register import RegisterPage
 from components.pages.dashboard import DashboardPage
 from components.pages.workspaces import WorkspacesPage
 from components.pages.integrations import IntegrationsPage
@@ -61,12 +60,12 @@ class App(ctk.CTk):
         # Register all pages
         self.register_page("HomePage",         HomePage)
         self.register_page("LoginPage",        LoginPage)
-        self.register_page("RegisterPage",     RegisterPage)
         self.register_page("DashboardPage",    DashboardPage)
         self.register_page("WorkspacesPage",   WorkspacesPage)
         self.register_page("IntegrationsPage", IntegrationsPage)
         self.register_page("SettingsPage",     SettingsPage)
         self.register_page("ProfilePage",      ProfilePage)
+
 
 
         # Show initial page
@@ -105,11 +104,16 @@ class App(ctk.CTk):
             page.grid_remove()
 
         # Show the target page
-        self.pages[name].grid(row=0, column=0, sticky="nsew")
-        self.pages[name].tkraise()
+        page = self.pages[name]
+        page.grid(row=0, column=0, sticky="nsew")
+        page.tkraise()
+
+        # Sincronizar destaque da página ativa no SideMenu
+        if hasattr(page, "sidemenu"):
+            page.sidemenu.set_active(name)
 
         # Notify the page it has been shown (optional lifecycle hook)
-        page = self.pages[name]
         if hasattr(page, "on_show") and callable(page.on_show):
             self.after(80, page.on_show)
+
 

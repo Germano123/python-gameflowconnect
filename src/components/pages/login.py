@@ -124,28 +124,8 @@ class LoginPage(DefaultLayout):
             text_color="gray50",
             hover_color="#162c38",
             command=lambda: self._parent.show_page("HomePage"),
-        ).grid(row=0, column=0, pady=8, padx=16, sticky="w")
+        ).grid(row=0, column=0, columnspan=2, pady=8, padx=16, sticky="ew")
 
-        ctk.CTkButton(
-            footer,
-            text="🚀 Experimentar demo",
-            font=ctk.CTkFont(size=11),
-            fg_color="transparent",
-            text_color="#f0a000",
-            hover_color="#162c38",
-            command=self._enter_demo,
-        ).grid(row=0, column=1, pady=8, padx=16, sticky="e")
-
-
-    # ------------------------------------------------------------------ #
-    # Auth handlers
-    # ------------------------------------------------------------------ #
-
-    def _enter_demo(self) -> None:
-        """Activates demo mode and navigates directly to the Dashboard."""
-        from state import AppState
-        AppState.enter_demo()
-        self._parent.show_page("DashboardPage")
 
     def on_show(self) -> None:
         """Chamado quando a tela de login é exibida. Tenta login automático com as credenciais salvas."""
