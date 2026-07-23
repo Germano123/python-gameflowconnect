@@ -1,0 +1,11 @@
+{
+  "project_id": "proj_7a6b00",
+  "name": "Assets Test Project",
+  "description": "Anexo de mídias",
+  "drive_folder_id": "demo_folder",
+  "owner": "designer@gameflow.io",
+  "created_at": "2026-07-23",
+  "members": [
+    "designer@gameflow.io"
+  ]
+}

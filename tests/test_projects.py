@@ -62,6 +62,16 @@ class TestProjectManagement(unittest.TestCase):
         self.assertEqual(len(projects), 1)
         self.assertEqual(projects[0].id, proj.id)
 
+        # Verificar se a pasta oculta .gameflow e o connection.json foram gerados
+        gf_path = os.path.join(self.test_db_dir, "RPG_Jogo", ".gameflow", "connection.json")
+        self.assertTrue(os.path.exists(gf_path))
+        import json
+        with open(gf_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            self.assertEqual(data["project_id"], proj.id)
+            self.assertEqual(data["name"], "RPG Jogo de Teste")
+
+
     def test_sqlite_delete_project(self):
         proj = self.manager.create_project(
             name="Delete Me Project",
@@ -102,3 +112,30 @@ class TestProjectManagement(unittest.TestCase):
         p_loaded = self.manager.get_project_by_id(proj.id)
         self.assertEqual(len(p_loaded.assets), 1)
         self.assertEqual(p_loaded.assets[0].name, "hero_run.png")
+
+    def test_sqlite_user_profile_crud(self):
+        from use_cases import UserProfileUseCase
+        uc = UserProfileUseCase(db_dir=self.test_db_dir)
+
+        # Clear profiles first
+        db = uc._db
+        conn = db.get_connection()
+        try:
+            conn.execute("DELETE FROM user_profiles")
+            conn.commit()
+        finally:
+            conn.close()
+
+        # Criar / Atualizar perfil
+        email = "developer@gameflow.io"
+        profile = uc.save_profile(email, username="Dev Master", bio="Python programmer and game dev.")
+
+        self.assertEqual(profile.email, email)
+        self.assertEqual(profile.username, "Dev Master")
+        self.assertEqual(profile.bio, "Python programmer and game dev.")
+
+        # Buscar perfil
+        loaded = uc.get_profile(email)
+        self.assertIsNotNone(loaded)
+        self.assertEqual(loaded.username, "Dev Master")
+

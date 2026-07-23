@@ -14,8 +14,9 @@ from googleapiclient.http import MediaFileUpload, MediaInMemoryUpload
 
 SCOPES = ["https://www.googleapis.com/auth/drive"]
 
-TOKEN_PATH = "token.json"
-CREDENTIALS_PATH = "credentials.json"
+TOKEN_PATH = os.path.join("data", "token.json")
+CREDENTIALS_PATH = os.path.join("data", "credentials.json")
+
 
 
 class DriveService:
@@ -64,8 +65,10 @@ class DriveService:
                 )
                 creds = flow.run_local_server(port=0)
 
+            os.makedirs(os.path.dirname(TOKEN_PATH), exist_ok=True)
             with open(TOKEN_PATH, "w") as token:
                 token.write(creds.to_json())
+
 
         self._creds = creds
         self._service = build("drive", "v3", credentials=self._creds)

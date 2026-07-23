@@ -46,6 +46,25 @@ class ProjectManagerUseCase:
         path = local_path or os.path.abspath(f"./GameProjects/{name}")
         os.makedirs(path, exist_ok=True)
 
+        # Criar pasta oculta .gameflow e connection.json localmente
+        gameflow_dir = os.path.join(path, ".gameflow")
+        os.makedirs(gameflow_dir, exist_ok=True)
+        import json
+        config_data = {
+            "project_id": proj_id,
+            "name": name,
+            "description": description,
+            "drive_folder_id": drive_folder_id,
+            "owner": owner,
+            "created_at": datetime.now().strftime("%Y-%m-%d"),
+            "members": [owner]
+        }
+        try:
+            with open(os.path.join(gameflow_dir, "connection.json"), "w", encoding="utf-8") as f:
+                json.dump(config_data, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            print(f"Erro ao salvar arquivo .gameflow/connection.json local: {e}")
+
         created_date = datetime.now().strftime("%Y-%m-%d")
         conn = self._db.get_connection()
         try:
@@ -99,9 +118,30 @@ class ProjectManagerUseCase:
                 print(f"Erro ao compartilhar no Drive: {e}")
                 return False
 
-        # 2. Registrar novo membro na entidade local
+        # 2. Registrar novo membro na entidade local e atualizar o connection.json
         proj.add_member(member_email)
+        if proj.local_path:
+            gameflow_dir = os.path.join(proj.local_path, ".gameflow")
+            if os.path.exists(gameflow_dir):
+                conn_path = os.path.join(gameflow_dir, "connection.json")
+                import json
+                try:
+                    config = {}
+                    if os.path.exists(conn_path):
+                        with open(conn_path, "r", encoding="utf-8") as f:
+                            config = json.load(f)
+                    
+                    members = config.get("members", [])
+                    if member_email not in members:
+                        members.append(member_email)
+                    config["members"] = members
+                    
+                    with open(conn_path, "w", encoding="utf-8") as f:
+                        json.dump(config, f, indent=2, ensure_ascii=False)
+                except Exception as e:
+                    print(f"Erro ao salvar arquivo .gameflow/connection.json local: {e}")
         return True
+
 
     def discover_shared_projects(self, user_email: str, drive_service) -> List[Project]:
         """

@@ -49,4 +49,14 @@ class LocalDatabase:
                 FOREIGN KEY(project_id) REFERENCES local_projects(id) ON DELETE CASCADE
             );
             """)
+
+            # Tabela de Perfis de Usuário
+            conn.execute("""
+            CREATE TABLE IF NOT EXISTS user_profiles (
+                email TEXT PRIMARY KEY,
+                username TEXT NOT NULL,
+                bio TEXT
+            );
+            """)
             conn.commit()
+
