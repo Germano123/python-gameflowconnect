@@ -16,11 +16,12 @@ class SideMenu(ctk.CTkFrame):
 
     _ITEMS = [
         ("Dashboard",     "📊  Dashboard",     "DashboardPage"),
-        ("Projetos",      "📁  Projetos",      "ProjectsPage"),
+        ("Workspaces",    "📁  Workspaces",    "WorkspacesPage"),
         ("Integrações",   "🔗  Integrações",   "IntegrationsPage"),
         ("Configurações", "⚙️  Configurações", "SettingsPage"),
         ("Perfil",        "👤  Perfil",        "ProfilePage"),
     ]
+
 
     def __init__(self, parent, on_navigate: Callable[[str], None], current_page: str = "DashboardPage", **kwargs):
         kwargs.setdefault("corner_radius", 0)

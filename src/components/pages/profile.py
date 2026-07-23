@@ -51,13 +51,16 @@ class ProfilePage(DefaultLayout):
         self._bio_in = InputField(left_panel, label="Bio", placeholder="Bio do artista ou desenvolvedor...")
         self._bio_in.grid(row=3, column=0, padx=20, pady=8, sticky="ew")
 
+        self._github_token_in = InputField(left_panel, label="GitHub Personal Access Token (PAT)", placeholder="ghp_...", show="*")
+        self._github_token_in.grid(row=4, column=0, padx=20, pady=8, sticky="ew")
+
         ButtonComponent(
             parent=left_panel,
             label="💾  Salvar Alterações do Perfil",
             size="medium",
             variant="success",
             onClick=self._save_profile_action,
-        ).grid(row=4, column=0, padx=20, pady=16, sticky="ew")
+        ).grid(row=5, column=0, padx=20, pady=16, sticky="ew")
 
         self._db_lbl = ctk.CTkLabel(
             left_panel,
@@ -65,7 +68,7 @@ class ProfilePage(DefaultLayout):
             font=ctk.CTkFont(family="Arial", size=11),
             text_color="#00aa00"
         )
-        self._db_lbl.grid(row=5, column=0, padx=20, pady=(10, 20), sticky="w")
+        self._db_lbl.grid(row=6, column=0, padx=20, pady=(10, 20), sticky="w")
 
         # --- Right Panel: Pending Team Invitations (Convites Recebidos) ---
         right_panel = ctk.CTkFrame(cf, corner_radius=12, border_width=1, border_color="#2d4a5a", fg_color="#162c38")
@@ -93,6 +96,7 @@ class ProfilePage(DefaultLayout):
 
         self._username_in.set(profile.username)
         self._bio_in.set(profile.bio)
+        self._github_token_in.set(profile.github_token or "")
 
         self._refresh_invitations()
 
@@ -102,13 +106,23 @@ class ProfilePage(DefaultLayout):
 
         username = self._username_in.get().strip()
         bio = self._bio_in.get().strip()
+        git_token = self._github_token_in.get().strip() or None
 
         if not username:
             ModalDialog(self._parent, title="Erro", message="O nome de usuário não pode ser vazio.", cancel_label="Fechar")
             return
 
         uc = UserProfileUseCase()
-        uc.save_profile(AppState.user_email, username, bio)
+        uc.save_profile(AppState.user_email, username, bio, git_token)
+
+        # Se houver alteração de token do GitHub, atualiza na sessão ativa
+        if git_token:
+            AppState.github_token = git_token
+            from services.git_connection import GitService
+            try:
+                AppState.git_service = GitService(token=git_token)
+            except Exception:
+                pass
 
         ModalDialog(
             self._parent,
@@ -116,6 +130,7 @@ class ProfilePage(DefaultLayout):
             message="Alterações do seu perfil salvas com sucesso no banco de dados local!",
             cancel_label="Entendido"
         )
+
 
     def _refresh_invitations(self) -> None:
         for w in self._invites_scroll.winfo_children():
@@ -132,7 +147,7 @@ class ProfilePage(DefaultLayout):
 
     def _fetch_drive_invites(self) -> None:
         from state import AppState
-        from use_cases import ProjectManagerUseCase
+        from use_cases import WorkspaceManagerUseCase
         
         self._pending_invites = []
         if not AppState.is_drive_connected():
@@ -144,8 +159,8 @@ class ProfilePage(DefaultLayout):
             drive_service = AppState.drive_service
             shared_files = drive_service.search_shared_projects()
             
-            manager = ProjectManagerUseCase()
-            local_projects = {p.id for p in manager.list_projects()}
+            manager = WorkspaceManagerUseCase()
+            local_workspaces = {w.id for w in manager.list_workspaces()}
 
             for file_info in shared_files:
                 file_id = file_info.get("id")
@@ -154,17 +169,18 @@ class ProfilePage(DefaultLayout):
                     continue
                 drive_folder_id = parents[0]
 
-                # Ler o manifesto do projeto compartilhado no Drive
+                # Ler o manifesto do workspace compartilhado no Drive
                 metadata = drive_service.read_json_file(file_id)
-                proj_id = metadata.get("id")
+                ws_id = metadata.get("id")
                 members = metadata.get("members", [])
 
-                # Se o usuário faz parte e o projeto não está adicionado localmente, é um convite pendente!
-                if AppState.user_email in members and proj_id not in local_projects:
+                # Se o usuário faz parte e o workspace não está adicionado localmente, é um convite pendente!
+                if AppState.user_email in members and ws_id not in local_workspaces:
                     self._pending_invites.append({
-                        "id": proj_id,
+                        "id": ws_id,
                         "name": metadata.get("name", "Sem nome"),
                         "description": metadata.get("description", "Sem descrição"),
+                        "engine": metadata.get("engine", "Godot"),
                         "owner": metadata.get("owner", "Desconhecido"),
                         "drive_folder_id": drive_folder_id,
                         "members": members,
@@ -205,7 +221,7 @@ class ProfilePage(DefaultLayout):
 
             ctk.CTkLabel(
                 card,
-                text=f"📁 Convite: {invite['name']}",
+                text=f"📁 Convite: {invite['name']} ({invite['engine']})",
                 font=ctk.CTkFont(family="Arial", size=12, weight="bold"),
                 text_color="#ffffff",
                 anchor="w"
@@ -238,25 +254,37 @@ class ProfilePage(DefaultLayout):
         if not local_dir:
             return
 
-        # Criar a pasta oculta .gameflow e connection.json localmente
+        # Criar a pasta oculta .gameflow e connection/manifest localmente
         import os
         import json
         gameflow_dir = os.path.join(local_dir, ".gameflow")
         os.makedirs(gameflow_dir, exist_ok=True)
-        config_data = {
-            "project_id": invite["id"],
+        manifest_data = {
+            "id": invite["id"],
             "name": invite["name"],
             "description": invite["description"],
-            "drive_folder_id": invite["drive_folder_id"],
+            "engine": invite["engine"],
             "owner": invite["owner"],
             "created_at": invite["created_at"],
+            "drive_folder_id": invite["drive_folder_id"],
             "members": invite["members"]
         }
+        config_data = {
+            "workspace_id": invite["id"],
+            "engine": invite["engine"],
+            "google_drive_folder_id": invite["drive_folder_id"],
+            "preferencias": {
+                "auto_sync": False,
+                "intervalo_sync_minutos": 15
+            }
+        }
         try:
-            with open(os.path.join(gameflow_dir, "connection.json"), "w", encoding="utf-8") as f:
+            with open(os.path.join(gameflow_dir, "manifest.json"), "w", encoding="utf-8") as f:
+                json.dump(manifest_data, f, indent=2, ensure_ascii=False)
+            with open(os.path.join(gameflow_dir, "config.json"), "w", encoding="utf-8") as f:
                 json.dump(config_data, f, indent=2, ensure_ascii=False)
         except Exception as e:
-            print(f"Erro ao salvar local .gameflow/connection.json: {e}")
+            print(f"Erro ao salvar arquivos .gameflow locais: {e}")
 
         # Gravar no SQLite local
         import sqlite3
@@ -266,16 +294,15 @@ class ProfilePage(DefaultLayout):
         try:
             with db.get_connection() as conn:
                 conn.execute(
-                    "INSERT INTO local_projects (id, name, description, drive_folder_id, local_path, owner, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                    (invite["id"], invite["name"], invite["description"], invite["drive_folder_id"], local_dir, invite["owner"], invite["created_at"])
+                    "INSERT INTO local_workspaces (id, name, description, engine, drive_folder_id, local_path, owner, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    (invite["id"], invite["name"], invite["description"], invite["engine"], invite["drive_folder_id"], local_dir, invite["owner"], invite["created_at"])
                 )
                 conn.commit()
 
-
             ModalDialog(
                 self._parent,
-                title="Projeto Adicionado!",
-                message=f"O projeto '{invite['name']}' foi sincronizado localmente na pasta:\n{local_dir}",
+                title="Workspace Adicionado!",
+                message=f"O workspace '{invite['name']}' foi sincronizado localmente na pasta:\n{local_dir}",
                 cancel_label="Entendido"
             )
             self._refresh_invitations()
@@ -283,14 +310,14 @@ class ProfilePage(DefaultLayout):
             ModalDialog(
                 self._parent,
                 title="Aviso",
-                message="Este projeto já está sincronizado em sua máquina.",
+                message="Este workspace já está sincronizado em sua máquina.",
                 cancel_label="Fechar"
             )
         except Exception as e:
             ModalDialog(
                 self._parent,
                 title="Erro",
-                message=f"Erro ao salvar projeto localmente: {e}",
+                message=f"Erro ao salvar workspace localmente: {e}",
                 cancel_label="Fechar"
             )
 
@@ -298,3 +325,4 @@ class ProfilePage(DefaultLayout):
         from state import AppState
         AppState.clear()
         self._parent.show_page("HomePage")
+

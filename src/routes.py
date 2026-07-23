@@ -11,7 +11,7 @@ from components.pages.home import HomePage
 from components.pages.login import LoginPage
 from components.pages.register import RegisterPage
 from components.pages.dashboard import DashboardPage
-from components.pages.projects import ProjectsPage
+from components.pages.workspaces import WorkspacesPage
 from components.pages.integrations import IntegrationsPage
 from components.pages.settings import SettingsPage
 from components.pages.profile import ProfilePage
@@ -63,10 +63,11 @@ class App(ctk.CTk):
         self.register_page("LoginPage",        LoginPage)
         self.register_page("RegisterPage",     RegisterPage)
         self.register_page("DashboardPage",    DashboardPage)
-        self.register_page("ProjectsPage",     ProjectsPage)
+        self.register_page("WorkspacesPage",   WorkspacesPage)
         self.register_page("IntegrationsPage", IntegrationsPage)
         self.register_page("SettingsPage",     SettingsPage)
         self.register_page("ProfilePage",      ProfilePage)
+
 
         # Show initial page
         self.show_page("HomePage")

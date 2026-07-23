@@ -147,6 +147,52 @@ class LoginPage(DefaultLayout):
         AppState.enter_demo()
         self._parent.show_page("DashboardPage")
 
+    def on_show(self) -> None:
+        """Chamado quando a tela de login é exibida. Tenta login automático com as credenciais salvas."""
+        import os
+        from state import AppState
+        from use_cases import UserProfileUseCase
+        from services.drive import DriveService, TOKEN_PATH
+        from services.git_connection import GitService
+
+        uc = UserProfileUseCase()
+        profile = uc.get_last_active_profile()
+
+        # Se houver token do Drive salvo localmente, tentar login automático
+        if os.path.exists(TOKEN_PATH) and profile:
+            self._set_status("Sessão salva encontrada. Conectando automaticamente...", "info")
+            self._show_progress(True)
+
+            def auto_login():
+                try:
+                    # 1. Reconectar Drive
+                    svc = DriveService()
+                    svc.authenticate()
+                    AppState.drive_service = svc
+                    AppState.user_email = profile.email
+                    self.after(0, lambda: self._set_status("Google Drive reconectado ✓", "success"))
+
+                    # 2. Reconectar GitHub (se houver token salvo)
+                    if profile.github_token:
+                        try:
+                            git_svc = GitService(token=profile.github_token)
+                            AppState.github_token = profile.github_token
+                            AppState.git_service = git_svc
+                            self.after(0, lambda: self._set_status("GitHub reconectado ✓", "success"))
+                        except Exception as ge:
+                            print(f"Erro auto-login GitHub: {ge}")
+
+                    # Redirecionar
+                    self.after(500, lambda: self._parent.show_page("DashboardPage"))
+                except Exception as e:
+                    print(f"Erro auto-login: {e}")
+                    self.after(0, lambda: self._set_status("Sessão anterior expirada. Faça login novamente.", "info"))
+                finally:
+                    self.after(0, lambda: self._show_progress(False))
+
+            threading.Thread(target=auto_login, daemon=True).start()
+
+
     def _on_github_login(self) -> None:
         from state import AppState
         from services.git_connection import GitService
@@ -199,9 +245,22 @@ class LoginPage(DefaultLayout):
 
     def _check_ready(self) -> None:
         from state import AppState
+        from use_cases import UserProfileUseCase
         if AppState.is_drive_connected() or AppState.is_github_connected():
+            if AppState.is_drive_connected():
+                try:
+                    uc = UserProfileUseCase()
+                    profile = uc.get_profile(AppState.user_email)
+                    if not profile:
+                        uc.save_profile(AppState.user_email, username="Usuário GameFlow", bio="", github_token=AppState.github_token)
+                    elif AppState.github_token:
+                        uc.save_profile(AppState.user_email, profile.username, profile.bio, github_token=AppState.github_token)
+                except Exception as ex:
+                    print(f"Erro ao salvar perfil ao logar: {ex}")
+
             self._set_status("Conexão realizada com sucesso! Entrando...", "success")
             self.after(600, lambda: self._parent.show_page("DashboardPage"))
+
 
 
     def _set_status(self, msg: str, kind: str = "info") -> None:

@@ -171,12 +171,13 @@ class DriveService:
 
     def search_shared_projects(self) -> list[dict]:
         """
-        Searches for shared folders that contain 'project_metadata.json' shared with the user.
+        Searches for shared folders that contain 'manifest.json' shared with the user.
         """
         self._require_auth()
-        query = "name = 'project_metadata.json' and sharedWithMe = true"
+        query = "name = 'manifest.json' and sharedWithMe = true"
         results = self._service.files().list(q=query, fields="files(id, name, parents)").execute()
         return results.get("files", [])
+
 
     def read_json_file(self, file_id: str) -> dict:
         self._require_auth()

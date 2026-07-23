@@ -4,12 +4,12 @@ from datetime import datetime
 from .asset import Asset
 
 @dataclass
-class ProjectNotification:
+class WorkspaceNotification:
     """
-    Entidade de domínio para Notificações de Atualização de Assets no Projeto.
+    Entidade de domínio para Notificações de Atualização de Assets no Workspace.
     """
     id: str
-    project_id: str
+    workspace_id: str
     author: str
     message: str
     asset_name: str
@@ -17,14 +17,15 @@ class ProjectNotification:
     read: bool = False
 
 @dataclass
-class Project:
+class Workspace:
     """
-    Entidade de domínio para Projetos no GameFlowConnect.
-    Principal unidade de organização, sincronização e colaboração entre artistas e devs.
+    Entidade de domínio para Workspaces (Conforme Seção 2 do doc.md).
+    Representa o projeto conectado, contendo engine, repositórios e colaboradores.
     """
     id: str
     name: str
     description: str
+    engine: str
     owner: str
     drive_folder_id: str
     members: List[str] = field(default_factory=list)

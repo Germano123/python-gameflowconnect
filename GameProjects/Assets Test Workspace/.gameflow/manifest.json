@@ -1,0 +1,12 @@
+{
+  "id": "ws_3a3ff1",
+  "name": "Assets Test Workspace",
+  "description": "Anexo de mídias",
+  "engine": "Godot",
+  "owner": "designer@gameflow.io",
+  "members": [
+    "designer@gameflow.io"
+  ],
+  "created_at": "2026-07-23",
+  "drive_folder_id": "demo_folder"
+}

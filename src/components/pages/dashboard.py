@@ -77,7 +77,7 @@ class DashboardPage(DefaultLayout):
         ).grid(row=0, column=2, padx=(0, 10), pady=8, sticky="e")
 
         # ── Projects list panel (Left) ───────────────────────────────────
-        self._proj_panel = self._make_panel(cf, "📁 Projetos Sincronizados", row=2, col=0)
+        self._proj_panel = self._make_panel(cf, "📁 Workspaces Sincronizados", row=2, col=0)
         self._projects_scroll = ctk.CTkScrollableFrame(self._proj_panel, fg_color="transparent")
         self._projects_scroll.pack(fill="both", expand=True, padx=6, pady=6)
 
@@ -102,47 +102,47 @@ class DashboardPage(DefaultLayout):
         threading.Thread(target=self._load_data_thread, daemon=True).start()
 
     def _load_data_thread(self) -> None:
-        from use_cases import ProjectManagerUseCase
+        from use_cases import WorkspaceManagerUseCase
         from state import AppState
 
-        manager = ProjectManagerUseCase()
+        manager = WorkspaceManagerUseCase()
         
-        # 1. Carregar lista de projetos do SQLite
-        projects = manager.list_projects()
+        # 1. Carregar lista de workspaces do SQLite
+        workspaces = manager.list_workspaces()
         
         # 2. Obter notificações do log no Drive
         notifications = []
         if AppState.is_drive_connected():
             try:
-                notifications = manager.get_unread_notifications(AppState.drive_service, projects)
+                notifications = manager.get_unread_notifications(AppState.drive_service, workspaces)
             except Exception as e:
                 print(f"Erro ao buscar notificações do Drive: {e}")
 
         # Renderizar na UI na thread do Tkinter
-        self.after(0, lambda: self._render_ui(projects, notifications))
+        self.after(0, lambda: self._render_ui(workspaces, notifications))
 
-    def _render_ui(self, projects, notifications) -> None:
+    def _render_ui(self, workspaces, notifications) -> None:
         self._status_lbl.configure(text="Sincronizado")
         
-        # Renderizar Projetos
+        # Renderizar Workspaces
         for w in self._projects_scroll.winfo_children():
             w.destroy()
 
-        if not projects:
+        if not workspaces:
             ctk.CTkLabel(
                 self._projects_scroll,
-                text="Nenhum projeto sincronizado localmente.\nVá para a página 'Projetos' para criar ou importar.",
+                text="Nenhum workspace sincronizado localmente.\nVá para a página 'Workspaces' para criar ou importar.",
                 font=ctk.CTkFont(family="Arial", size=11),
                 text_color="gray50",
             ).pack(pady=40)
         else:
-            for proj in projects:
+            for ws in workspaces:
                 card = ctk.CTkFrame(self._projects_scroll, corner_radius=8, fg_color="#1a3040", border_width=1, border_color="#2d4a5a")
                 card.pack(fill="x", padx=4, pady=4)
                 
                 ctk.CTkLabel(
                     card,
-                    text=f"📁 {proj.name}",
+                    text=f"📁 {ws.name} ({ws.engine})",
                     font=ctk.CTkFont(family="Arial", size=12, weight="bold"),
                     text_color="#ffffff",
                     anchor="w"
@@ -150,12 +150,13 @@ class DashboardPage(DefaultLayout):
 
                 ctk.CTkLabel(
                     card,
-                    text=f"Diretório: {proj.local_path}\nProprietário: {proj.owner}",
+                    text=f"Diretório: {ws.local_path}\nProprietário: {ws.owner}",
                     font=ctk.CTkFont(family="Arial", size=10),
                     text_color="gray60",
                     anchor="w",
                     justify="left"
                 ).pack(fill="x", padx=12, pady=(0, 8))
+
 
         # Renderizar Feed de Atividades
         for w in self._feed_scroll.winfo_children():

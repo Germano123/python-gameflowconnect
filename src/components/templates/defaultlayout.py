@@ -62,20 +62,24 @@ class DefaultLayout(ctk.CTkFrame):
             self._parent_app.show_page(page_name)
 
     def _show_notifications_modal(self) -> None:
-        from use_cases import ProjectManagerUseCase
-        manager = ProjectManagerUseCase()
-        unreads = manager.get_unread_notifications()
+        from use_cases import WorkspaceManagerUseCase
+        from state import AppState
+        manager = WorkspaceManagerUseCase()
+        workspaces = manager.list_workspaces()
+        unreads = []
+        if AppState.is_drive_connected():
+            unreads = manager.get_unread_notifications(AppState.drive_service, workspaces)
 
         if not unreads:
-            msg = "Você não possui novos alertas de atualizações em seus projetos."
+            msg = "Você não possui novos alertas de atualizações em seus workspaces."
         else:
             msg = "\n\n".join([f"🔔 {n.message} ({n.timestamp})" for n in unreads[:5]])
-            manager.mark_all_as_read()
 
         ModalDialog(
             self._parent_app,
-            title="Alertas do Projeto",
+            title="Alertas do Workspace",
             message=msg,
             cancel_label="Fechar",
         )
+
 

@@ -1,4 +1,6 @@
 from dataclasses import dataclass
+from typing import Optional
+
 
 @dataclass
 class UserProfile:
@@ -9,3 +11,5 @@ class UserProfile:
     email: str
     username: str
     bio: str
+    github_token: Optional[str] = None
+
