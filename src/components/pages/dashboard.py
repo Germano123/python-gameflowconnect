@@ -140,13 +140,34 @@ class DashboardPage(DefaultLayout):
                 card = ctk.CTkFrame(self._projects_scroll, corner_radius=8, fg_color="#1a3040", border_width=1, border_color="#2d4a5a")
                 card.pack(fill="x", padx=4, pady=4)
                 
+                row_frame = ctk.CTkFrame(card, fg_color="transparent")
+                row_frame.pack(fill="x", padx=12, pady=(8, 2))
+
                 ctk.CTkLabel(
-                    card,
+                    row_frame,
                     text=f"📁 {ws.name} ({ws.engine})",
                     font=ctk.CTkFont(family="Arial", size=12, weight="bold"),
                     text_color="#ffffff",
                     anchor="w"
-                ).pack(fill="x", padx=12, pady=(8, 2))
+                ).pack(side="left", fill="x", expand=True)
+
+                from state import AppState
+                is_owner = (ws.owner == AppState.user_email)
+
+                badge_text = "Proprietário" if is_owner else "Convidado"
+                badge_color = "#00aa00" if is_owner else "#f0a000"
+
+                badge = ctk.CTkLabel(
+                    row_frame,
+                    text=badge_text,
+                    font=ctk.CTkFont(family="Arial", size=9, weight="bold"),
+                    text_color="#ffffff",
+                    fg_color=badge_color,
+                    corner_radius=4,
+                    width=75,
+                    height=18
+                )
+                badge.pack(side="right", padx=(5, 0))
 
                 ctk.CTkLabel(
                     card,
@@ -156,6 +177,7 @@ class DashboardPage(DefaultLayout):
                     anchor="w",
                     justify="left"
                 ).pack(fill="x", padx=12, pady=(0, 8))
+
 
 
         # Renderizar Feed de Atividades

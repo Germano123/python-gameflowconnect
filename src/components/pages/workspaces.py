@@ -157,14 +157,34 @@ class WorkspacesPage(DefaultLayout):
             )
             card.pack(fill="x", padx=4, pady=4)
 
+            row_frame = ctk.CTkFrame(card, fg_color="transparent")
+            row_frame.pack(fill="x", padx=10, pady=(8, 2))
+
             lbl = ctk.CTkLabel(
-                card,
+                row_frame,
                 text=f"📁 {ws.name} ({ws.engine})",
                 font=ctk.CTkFont(family="Arial", size=12, weight="bold"),
                 text_color="#ffffff",
                 anchor="w",
             )
-            lbl.pack(fill="x", padx=10, pady=(8, 2))
+            lbl.pack(side="left", fill="x", expand=True)
+
+            from state import AppState
+            is_owner = (ws.owner == AppState.user_email)
+            badge_text = "Proprietário" if is_owner else "Convidado"
+            badge_color = "#00aa00" if is_owner else "#f0a000"
+
+            badge = ctk.CTkLabel(
+                row_frame,
+                text=badge_text,
+                font=ctk.CTkFont(family="Arial", size=9, weight="bold"),
+                text_color="#ffffff",
+                fg_color=badge_color,
+                corner_radius=4,
+                width=75,
+                height=18
+            )
+            badge.pack(side="right", padx=(5, 0))
 
             members_count = len(ws.members)
             sub_lbl = ctk.CTkLabel(
@@ -177,8 +197,11 @@ class WorkspacesPage(DefaultLayout):
             sub_lbl.pack(fill="x", padx=10, pady=(0, 8))
 
             card.bind("<Button-1>", lambda _, w_item=ws: self._select_workspace(w_item))
+            row_frame.bind("<Button-1>", lambda _, w_item=ws: self._select_workspace(w_item))
             lbl.bind("<Button-1>", lambda _, w_item=ws: self._select_workspace(w_item))
+            badge.bind("<Button-1>", lambda _, w_item=ws: self._select_workspace(w_item))
             sub_lbl.bind("<Button-1>", lambda _, w_item=ws: self._select_workspace(w_item))
+
 
         if not self._selected_workspace_id and workspaces:
             self._select_workspace(workspaces[0])

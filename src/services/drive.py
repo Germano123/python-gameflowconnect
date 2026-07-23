@@ -174,9 +174,10 @@ class DriveService:
         Searches for shared folders that contain 'manifest.json' shared with the user.
         """
         self._require_auth()
-        query = "name = 'manifest.json' and sharedWithMe = true"
+        query = "name = 'manifest.json' and trashed = false"
         results = self._service.files().list(q=query, fields="files(id, name, parents)").execute()
         return results.get("files", [])
+
 
 
     def read_json_file(self, file_id: str) -> dict:

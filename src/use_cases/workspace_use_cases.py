@@ -166,9 +166,10 @@ class WorkspaceManagerUseCase:
             return discovered
 
         try:
-            query = "name = 'manifest.json' and sharedWithMe = true"
+            query = "name = 'manifest.json' and trashed = false"
             results = drive_service._service.files().list(q=query, fields="files(id, name, parents)").execute()
             shared_files = results.get("files", [])
+
 
             for file_info in shared_files:
                 file_id = file_info.get("id")
