@@ -35,7 +35,8 @@ class AppState:
     github_token: Optional[str] = None
     user_email: str = "user@gameflow.io"
     import os
-    local_base_dir: str = os.path.expanduser("~/Documents")
+    local_base_dir: str = os.path.join(os.path.expanduser("~/Documents"), "GameFlow")
+
 
 
 
@@ -71,7 +72,8 @@ class AppState:
         import os
         from adapters.local_file_adapter import LocalFileAdapter
 
-        path = cls.local_project_path or os.path.abspath("./GameProject")
+        path = cls.local_project_path or os.path.abspath(os.path.join(cls.local_base_dir, "DefaultWorkspace"))
+
         return LocalFileAdapter(path)
 
     # ------------------------------------------------------------------ #

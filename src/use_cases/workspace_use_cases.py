@@ -45,7 +45,9 @@ class WorkspaceManagerUseCase:
                 print(f"Erro ao criar pasta no Drive: {e}")
 
         # 2. Gravar localmente
-        path = local_path or os.path.abspath(f"./GameProjects/{name}")
+        from state import AppState
+        path = local_path or os.path.abspath(os.path.join(AppState.local_base_dir, name))
+
         os.makedirs(path, exist_ok=True)
 
         # Criar a pasta oculta .gameflow e os manifestos

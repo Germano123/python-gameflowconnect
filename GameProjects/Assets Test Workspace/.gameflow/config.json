@@ -1,9 +1,0 @@
-{
-  "workspace_id": "ws_621406",
-  "engine": "Godot",
-  "google_drive_folder_id": "demo_folder",
-  "preferencias": {
-    "auto_sync": false,
-    "intervalo_sync_minutos": 15
-  }
-}
