@@ -36,20 +36,28 @@ class FileCard(ctk.CTkFrame):
         status_text: Optional[str] = None,
         on_click: Optional[Callable] = None,
         on_sync: Optional[Callable] = None,
+        on_rename: Optional[Callable] = None,
+        on_delete: Optional[Callable] = None,
+        is_uploading: bool = False,
         **kwargs,
     ):
         kwargs.setdefault("corner_radius", 8)
         kwargs.setdefault("border_width", 1)
+        if is_uploading:
+            kwargs["fg_color"] = "#0e1d25"
+            kwargs["border_color"] = "#162c38"
         super().__init__(parent, **kwargs)
 
         self._on_click = on_click
         self._on_sync = on_sync
-        self._build(name, mime_type, size, modified, status_text)
+        self._on_rename = on_rename
+        self._on_delete = on_delete
+        self._build(name, mime_type, size, modified, status_text, is_uploading)
 
-        if on_click and not on_sync:
+        if on_click and not is_uploading:
             self._bind_click(self)
 
-    def _build(self, name: str, mime_type: str, size: Optional[str], modified: Optional[str], status_text: Optional[str]) -> None:
+    def _build(self, name: str, mime_type: str, size: Optional[str], modified: Optional[str], status_text: Optional[str], is_uploading: bool) -> None:
         self.grid_columnconfigure(1, weight=1)
 
         # Icon label
@@ -58,7 +66,7 @@ class FileCard(ctk.CTkFrame):
             self,
             text=icon,
             font=ctk.CTkFont(size=22),
-            text_color=self.ACCENT,
+            text_color="gray45" if is_uploading else self.ACCENT,
             width=36,
         )
         icon_lbl.grid(row=0, column=0, rowspan=2, padx=(10, 8), pady=10, sticky="ns")
@@ -68,6 +76,7 @@ class FileCard(ctk.CTkFrame):
             self,
             text=name,
             font=ctk.CTkFont(family="Arial", size=12, weight="bold"),
+            text_color="gray50" if is_uploading else "#ffffff",
             anchor="w",
         )
         name_lbl.grid(row=0, column=1, sticky="ew", padx=(0, 10), pady=(8, 0))
@@ -88,38 +97,74 @@ class FileCard(ctk.CTkFrame):
             text=meta_text,
             font=ctk.CTkFont(family="Arial", size=10),
             anchor="w",
-            text_color="#7fa8c0" if status_text == "SYNCHRONIZED" else "gray60",
+            text_color="gray40" if is_uploading else ("#7fa8c0" if status_text == "SYNCHRONIZED" else "gray60"),
         )
         meta_lbl.grid(row=1, column=1, sticky="ew", padx=(0, 10), pady=(0, 8))
 
-        # Optional Sync action button
-        if self._on_sync:
-            is_synced = status_text == "SYNCHRONIZED"
-            btn_text = "✓ Na Engine" if is_synced else "📥 Sincronizar"
-            btn_color = "#1a4a28" if is_synced else "#00aa00"
-            btn_hover = "#1e3743" if is_synced else "#008800"
+        # Action buttons on the right (disabled during upload)
+        if not is_uploading and (self._on_sync or self._on_rename or self._on_delete):
+            actions_frame = ctk.CTkFrame(self, fg_color="transparent")
+            actions_frame.grid(row=0, column=2, rowspan=2, padx=(4, 10), pady=8, sticky="e")
 
-            sync_btn = ctk.CTkButton(
-                self,
-                text=btn_text,
-                font=ctk.CTkFont(family="Arial", size=10, weight="bold"),
-                fg_color=btn_color,
-                hover_color=btn_hover,
-                height=26,
-                width=90,
-                command=self._on_sync,
-            )
-            sync_btn.grid(row=0, column=2, rowspan=2, padx=(4, 10), pady=8, sticky="e")
+            if self._on_rename:
+                rename_btn = ctk.CTkButton(
+                    actions_frame,
+                    text="✏️",
+                    font=ctk.CTkFont(size=12),
+                    fg_color="#1a3743",
+                    hover_color="#2d5266",
+                    height=26,
+                    width=30,
+                    command=self._on_rename,
+                )
+                rename_btn.pack(side="left", padx=2)
+
+            if self._on_delete:
+                delete_btn = ctk.CTkButton(
+                    actions_frame,
+                    text="🗑️",
+                    font=ctk.CTkFont(size=12),
+                    fg_color="#3e1c1c",
+                    hover_color="#5e2c2c",
+                    height=26,
+                    width=30,
+                    command=self._on_delete,
+                )
+                delete_btn.pack(side="left", padx=2)
+
+            if self._on_sync:
+                is_synced = status_text == "SYNCHRONIZED"
+                btn_text = "✓ Na Engine" if is_synced else "📥 Sincronizar"
+                btn_color = "#1a4a28" if is_synced else "#00aa00"
+                btn_hover = "#1e3743" if is_synced else "#008800"
+
+                sync_btn = ctk.CTkButton(
+                    actions_frame,
+                    text=btn_text,
+                    font=ctk.CTkFont(family="Arial", size=10, weight="bold"),
+                    fg_color=btn_color,
+                    hover_color=btn_hover,
+                    height=26,
+                    width=90,
+                    command=self._on_sync,
+                )
+                sync_btn.pack(side="left", padx=2)
 
     def _get_icon(self, mime_type: str) -> str:
+        if mime_type in ["application/vnd.google-apps.folder", "folder/directory"]:
+            return "📁"
         category = mime_type.split("/")[0]
         return self._ICONS.get(category, "📄")
 
     def _bind_click(self, widget) -> None:
-        """Recursively binds click and hover to the card and all children."""
+        """Recursively binds click and hover to the card and all children, avoiding buttons."""
+        if isinstance(widget, ctk.CTkButton):
+            return
         widget.bind("<Button-1>", lambda _: self._on_click())
         widget.bind("<Enter>", lambda _: self.configure(border_color="#00aa00"))
         widget.bind("<Leave>", lambda _: self.configure(border_color="gray30"))
         for child in widget.winfo_children():
             self._bind_click(child)
+
+
 

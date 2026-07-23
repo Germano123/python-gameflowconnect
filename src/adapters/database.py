@@ -61,6 +61,14 @@ class LocalDatabase:
             );
             """)
 
+            # 4. Tabela de Workspaces ignorados/excluídos para evitar redescobri-los automaticamente do Drive
+            conn.execute("""
+            CREATE TABLE IF NOT EXISTS ignored_workspaces (
+                id TEXT PRIMARY KEY
+            );
+            """)
+
+
             try:
                 conn.execute("ALTER TABLE user_profiles ADD COLUMN github_token TEXT;")
             except sqlite3.OperationalError:

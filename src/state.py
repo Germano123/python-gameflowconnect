@@ -34,6 +34,9 @@ class AppState:
     # Authentication credentials
     github_token: Optional[str] = None
     user_email: str = "user@gameflow.io"
+    import os
+    local_base_dir: str = os.path.expanduser("~/Documents")
+
 
 
     # Service instances (set after successful authentication)

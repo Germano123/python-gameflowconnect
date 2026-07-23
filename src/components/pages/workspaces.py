@@ -1,19 +1,56 @@
 import customtkinter as ctk
 import threading
+import os
+import shutil
 from tkinter import filedialog
 from ..templates import DefaultLayout
 from ..atoms import ButtonComponent, TitleText, SubtitleText, BodyText, StatusBadge
 from ..molecules import FileCard, ModalDialog, InputField
 
 
+class InputDialog(ctk.CTkToplevel):
+    """
+    Componente Molecule: Uma caixa de diálogo modal de input com design consistente.
+    """
+    def __init__(self, parent, title: str, prompt: str, callback, initial_value: str = ""):
+        super().__init__(parent)
+        self.title(title)
+        self.geometry("350x180")
+        self.grab_set()
+        self.resizable(False, False)
+
+        # Centralizar na tela pai
+        self.update_idletasks()
+        x = parent.winfo_x() + (parent.winfo_width() - 350) // 2
+        y = parent.winfo_y() + (parent.winfo_height() - 180) // 2
+        self.geometry(f"+{x}+{y}")
+
+        ctk.CTkLabel(self, text=prompt, font=ctk.CTkFont(family="Arial", size=12, weight="bold"), text_color="#ffffff").pack(pady=(20, 8))
+        
+        self.entry = ctk.CTkEntry(self, width=280, fg_color="#13232c", border_color="#2d4a5a", text_color="#ffffff")
+        self.entry.pack(pady=6)
+        self.entry.insert(0, initial_value)
+        self.entry.focus()
+
+        def confirm():
+            val = self.entry.get().strip()
+            if val:
+                callback(val)
+            self.destroy()
+
+        ButtonComponent(self, label="Confirmar", variant="success", onClick=confirm).pack(pady=(12, 12))
+
+
 class WorkspacesPage(DefaultLayout):
     """
-    Page: Gestão de Workspaces (Workspaces).
-    Permite gerenciar, criar e colaborar em Workspaces.
-    Valida a conexão ativa com o Google Drive e suporta a seleção de game engines (Unity e Godot).
+    Page: Gestão de Workspaces (Workspaces) e Explorador de Arquivos.
+    Permite gerenciar, criar, navegar em pastas, gerenciar arquivos/pastas
+    e sincronizar assets diretamente com o Drive.
     """
     def __init__(self, parent):
         self._parent = parent
+        self._current_subpath = ""
+        self._uploading_files = set()  # Set de caminhos relativos em upload ativo
         super().__init__(
             parent,
             title="Workspaces",
@@ -22,6 +59,7 @@ class WorkspacesPage(DefaultLayout):
         )
         self._selected_workspace_id = None
         self._build_ui()
+
 
     def _build_ui(self) -> None:
         cf = self.content_frame
@@ -33,7 +71,52 @@ class WorkspacesPage(DefaultLayout):
         toolbar = ctk.CTkFrame(cf, fg_color="transparent")
         toolbar.grid(row=0, column=0, columnspan=2, sticky="ew", padx=20, pady=(16, 10))
 
-        TitleText(toolbar, text="📁 Gestão de Workspaces & Equipes").pack(side="left")
+        TitleText(toolbar, text="📁 Gestão de Workspaces & Equipes").pack(side="top", anchor="w")
+
+        # Campo editável de diretório base (Documents por padrão)
+        base_dir_frame = ctk.CTkFrame(toolbar, fg_color="transparent")
+        base_dir_frame.pack(fill="x", pady=(8, 0), anchor="w")
+
+        ctk.CTkLabel(
+            base_dir_frame,
+            text="Diretório Base Local:",
+            font=ctk.CTkFont(family="Arial", size=11, weight="bold"),
+            text_color="gray60",
+        ).pack(side="left", padx=(0, 6))
+
+        from state import AppState
+        self._base_dir_var = ctk.StringVar(value=AppState.local_base_dir)
+        self._base_dir_var.trace_add("write", lambda *args: setattr(AppState, "local_base_dir", self._base_dir_var.get()))
+
+        self._base_dir_entry = ctk.CTkEntry(
+            base_dir_frame,
+            textvariable=self._base_dir_var,
+            width=360,
+            height=28,
+            font=ctk.CTkFont(size=11),
+            fg_color="#13232c",
+            border_color="#2d4a5a",
+            text_color="#ffffff"
+        )
+        self._base_dir_entry.pack(side="left", padx=(0, 8))
+
+        def browse_base_dir():
+            chosen = filedialog.askdirectory(
+                title="Selecionar Diretório Base",
+                initialdir=self._base_dir_var.get()
+            )
+            if chosen:
+                self._base_dir_var.set(chosen)
+                AppState.local_base_dir = chosen
+
+
+        ButtonComponent(
+            parent=base_dir_frame,
+            label="📁 Alterar...",
+            size="small",
+            variant="primary",
+            onClick=browse_base_dir,
+        ).pack(side="left", padx=(0, 20))
 
         ButtonComponent(
             parent=toolbar,
@@ -41,7 +124,7 @@ class WorkspacesPage(DefaultLayout):
             size="small",
             variant="success",
             onClick=self._click_new_workspace,
-        ).pack(side="right")
+        ).pack(side="right", pady=(0, 10))
 
         # Left Column: Workspace List
         left_panel = ctk.CTkFrame(cf, corner_radius=12, border_width=1, border_color="#2d4a5a", fg_color="#162c38")
@@ -145,6 +228,7 @@ class WorkspacesPage(DefaultLayout):
 
         if not workspaces:
             ctk.CTkLabel(self._workspaces_scroll, text="Nenhum workspace criado.").pack(pady=20)
+            self._clear_workspace_details()
             return
 
         for ws in workspaces:
@@ -202,12 +286,21 @@ class WorkspacesPage(DefaultLayout):
             badge.bind("<Button-1>", lambda _, w_item=ws: self._select_workspace(w_item))
             sub_lbl.bind("<Button-1>", lambda _, w_item=ws: self._select_workspace(w_item))
 
-
         if not self._selected_workspace_id and workspaces:
             self._select_workspace(workspaces[0])
 
+    def _clear_workspace_details(self) -> None:
+        self._selected_workspace_id = None
+        self._current_subpath = ""
+        self._ws_title_lbl.configure(text="Selecione um Workspace")
+        self._ws_desc_lbl.configure(text="Clique em um workspace à esquerda para visualizar detalhes e assets.")
+        for w in self._assets_scroll.winfo_children():
+            w.destroy()
+
     def _select_workspace(self, ws) -> None:
+
         self._selected_workspace_id = ws.id
+        self._current_subpath = ""  # Sempre resetar para a raiz ao trocar de workspace
         self._ws_title_lbl.configure(text=f"📁 {ws.name}  [Engine: {ws.engine}]")
         members_str = ", ".join(ws.members) if ws.members else ws.owner
         self._ws_desc_lbl.configure(text=f"{ws.description}\nProprietário: {ws.owner}\nMembros: {members_str}")
@@ -220,36 +313,253 @@ class WorkspacesPage(DefaultLayout):
         for w in self._assets_scroll.winfo_children():
             w.destroy()
 
-        # Obter status dinâmico dos assets locais vs remotos no Drive
+        # Obter status dinâmico dos assets locais vs remotos no Drive no subpath atual
         manager = WorkspaceManagerUseCase()
-        assets = manager.get_workspace_assets_sync_status(ws.id, AppState.drive_service)
+        assets = manager.get_workspace_assets_sync_status(ws.id, AppState.drive_service, self._current_subpath)
+
+        # ── Navigation & Folder breadcrumbs ───────────────────────────────
+        nav_bar = ctk.CTkFrame(self._assets_scroll, fg_color="transparent")
+        nav_bar.pack(fill="x", padx=4, pady=(0, 8))
+
+        path_display = f"Raiz / {self._current_subpath.replace('\\', ' / ')}" if self._current_subpath else "Raiz"
+        ctk.CTkLabel(
+            nav_bar,
+            text=f"📍 {path_display}",
+            font=ctk.CTkFont(family="Arial", size=11, weight="bold"),
+            text_color="#ffffff",
+        ).pack(side="left")
+
+        # Botão Nova Pasta
+        ButtonComponent(
+            parent=nav_bar,
+            label="📁 Nova Pasta",
+            size="small",
+            variant="success",
+            onClick=lambda: self._create_folder_prompt(ws),
+        ).pack(side="right", padx=(8, 0))
+
+        if self._current_subpath:
+            ButtonComponent(
+                parent=nav_bar,
+                label="⬆️ Voltar",
+                size="small",
+                variant="secondary",
+                onClick=lambda: self._go_back_directory(ws),
+            ).pack(side="right")
 
         if not assets:
             ctk.CTkLabel(
                 self._assets_scroll,
-                text="Nenhum asset anexado a este workspace ainda.\nColoque arquivos na pasta local do projeto ou clique em 'Enviar Asset'.",
+                text="Esta pasta está vazia.\nColoque arquivos na pasta local do projeto ou clique em 'Enviar Asset'.",
                 font=ctk.CTkFont(family="Arial", size=11),
                 text_color="gray50",
             ).pack(pady=40)
             return
 
         for asset in assets:
+            rel_key = os.path.join(self._current_subpath, asset.name).replace("\\", "/")
+            is_uploading = rel_key in self._uploading_files
+
             status_txt = "SYNCHRONIZED"
-            if asset.status.name == "REMOTE_ONLY":
+            if is_uploading:
+                status_txt = "Enviando..."
+            elif asset.status.name == "REMOTE_ONLY":
                 status_txt = "Nuvem"
             elif asset.status.name == "LOCAL_ONLY":
                 status_txt = "Pendente de Envio"
+
+            is_dir = asset.mime_type == "application/vnd.google-apps.folder"
+
+            # Ação de clique principal no corpo do card
+            if is_dir:
+                click_cmd = lambda a=asset: self._enter_folder(ws, a.name)
+            else:
+                click_cmd = lambda a=asset: self._manage_file_modal(ws, a)
 
             card = FileCard(
                 self._assets_scroll,
                 name=asset.name,
                 mime_type=asset.mime_type or "application/octet-stream",
-                size=asset.formatted_size,
+                size=asset.formatted_size if not is_dir else None,
                 modified=asset.modified_time,
                 status_text=status_txt,
-                on_sync=lambda a=asset: self._sync_asset_action(ws, a),
+                on_click=click_cmd,
+                on_sync=None if is_dir else (lambda a=asset: self._sync_asset_action(ws, a)),
+                on_rename=lambda a=asset: self._rename_item_prompt(ws, a.name),
+                on_delete=lambda a=asset: self._delete_item_confirm(ws, a.name),
+                is_uploading=is_uploading
             )
             card.pack(fill="x", padx=4, pady=3)
+
+
+
+    def _enter_folder(self, ws, folder_name: str) -> None:
+        self._current_subpath = os.path.join(self._current_subpath, folder_name)
+        self._refresh_workspace_assets(ws)
+
+    def _go_back_directory(self, ws) -> None:
+        self._current_subpath = os.path.dirname(self._current_subpath)
+        self._refresh_workspace_assets(ws)
+
+    def _create_folder_prompt(self, ws) -> None:
+        from state import AppState
+        from use_cases import WorkspaceManagerUseCase
+        
+        def do_create(name):
+            manager = WorkspaceManagerUseCase()
+            if manager.create_workspace_folder(ws.id, self._current_subpath, name, AppState.drive_service):
+                self._refresh_workspace_assets(ws)
+                
+        InputDialog(self._parent, title="Criar Pasta", prompt="Nome da nova pasta:", callback=do_create)
+
+    def _manage_folder_modal(self, ws, folder_name: str) -> None:
+        modal = ctk.CTkToplevel(self._parent)
+        modal.title(f"Pasta: {folder_name}")
+        modal.geometry("320x240")
+        modal.grab_set()
+        modal.resizable(False, False)
+
+        ctk.CTkLabel(modal, text=f"📂 Pasta: {folder_name}", font=ctk.CTkFont(size=14, weight="bold")).pack(pady=16)
+
+        ButtonComponent(
+            parent=modal,
+            label="📁 Entrar na Pasta",
+            size="medium",
+            variant="success",
+            onClick=lambda: [modal.destroy(), self._enter_folder(ws, folder_name)]
+        ).pack(pady=8, fill="x", padx=40)
+
+        ButtonComponent(
+            parent=modal,
+            label="✏️ Renomear Pasta",
+            size="medium",
+            variant="primary",
+            onClick=lambda: [modal.destroy(), self._rename_item_prompt(ws, folder_name)]
+        ).pack(pady=8, fill="x", padx=40)
+
+        ButtonComponent(
+            parent=modal,
+            label="🗑️ Excluir Pasta",
+            size="medium",
+            variant="danger",
+            onClick=lambda: [modal.destroy(), self._delete_item_confirm(ws, folder_name)]
+        ).pack(pady=8, fill="x", padx=40)
+
+    def _manage_file_modal(self, ws, asset) -> None:
+        modal = ctk.CTkToplevel(self._parent)
+        modal.title(f"Arquivo: {asset.name}")
+        modal.geometry("500x480")
+        modal.grab_set()
+
+        ctk.CTkLabel(modal, text=f"📄 {asset.name}", font=ctk.CTkFont(size=14, weight="bold")).pack(pady=(12, 4))
+        ctk.CTkLabel(modal, text=f"Tamanho: {asset.formatted_size}   |   Status: {asset.status.name}   |   Versão: 1.0", font=ctk.CTkFont(size=11), text_color="gray50").pack(pady=2)
+
+        # Preview area
+        preview_frame = ctk.CTkFrame(modal, fg_color="#13232c", corner_radius=8, height=180)
+        preview_frame.pack(fill="both", expand=True, padx=20, pady=12)
+
+        preview_lbl = ctk.CTkLabel(preview_frame, text="Sem visualização disponível", text_color="gray60")
+        preview_lbl.pack(pady=60)
+
+        # Carregar texto de visualização se aplicável
+        if asset.local_path and os.path.exists(asset.local_path):
+            ext = os.path.splitext(asset.name)[1].lower()
+            if ext in [".txt", ".json", ".md", ".py"]:
+                try:
+                    with open(asset.local_path, "r", encoding="utf-8") as f:
+                        text_content = f.read(1500)
+                    preview_lbl.destroy()
+                    textbox = ctk.CTkTextbox(preview_frame, fg_color="transparent", text_color="#ffffff")
+                    textbox.pack(fill="both", expand=True, padx=8, pady=8)
+                    textbox.insert("1.0", text_content)
+                    textbox.configure(state="disabled")
+                except Exception as ex:
+                    print(f"Erro preview texto: {ex}")
+            elif ext in [".png", ".jpg", ".jpeg"]:
+                try:
+                    from PIL import Image, ImageTk
+                    # Carregar imagem redimensionada
+                    pil_img = Image.open(asset.local_path)
+                    pil_img.thumbnail((360, 160))
+                    tk_img = ImageTk.PhotoImage(pil_img)
+                    
+                    preview_lbl.configure(text="", image=tk_img)
+                    # Manter referência para evitar garbage collection
+                    preview_lbl.image = tk_img
+                except Exception as ex:
+                    print(f"Erro preview imagem: {ex}")
+
+        # Ações
+        actions_row = ctk.CTkFrame(modal, fg_color="transparent")
+        actions_row.pack(fill="x", padx=20, pady=(0, 20))
+
+        ButtonComponent(
+            parent=actions_row,
+            label="✏️ Renomear",
+            size="small",
+            variant="primary",
+            onClick=lambda: [modal.destroy(), self._rename_item_prompt(ws, asset.name)]
+        ).pack(side="left", padx=5)
+
+        ButtonComponent(
+            parent=actions_row,
+            label="📦 Mover",
+            size="small",
+            variant="secondary",
+            onClick=lambda: [modal.destroy(), self._move_item_prompt(ws, asset.name)]
+        ).pack(side="left", padx=5)
+
+        ButtonComponent(
+            parent=actions_row,
+            label="🗑️ Excluir",
+            size="small",
+            variant="danger",
+            onClick=lambda: [modal.destroy(), self._delete_item_confirm(ws, asset.name)]
+        ).pack(side="right", padx=5)
+
+    def _rename_item_prompt(self, ws, old_name: str) -> None:
+        from state import AppState
+        from use_cases import WorkspaceManagerUseCase
+        
+        def do_rename(new_name):
+            manager = WorkspaceManagerUseCase()
+            if manager.rename_workspace_item(ws.id, self._current_subpath, old_name, new_name, AppState.drive_service):
+                self._refresh_workspace_assets(ws)
+                
+        InputDialog(self._parent, title="Renomear Item", prompt=f"Renomear '{old_name}' para:", callback=do_rename, initial_value=old_name)
+
+    def _delete_item_confirm(self, ws, name: str) -> None:
+        def do_delete():
+            from state import AppState
+            from use_cases import WorkspaceManagerUseCase
+            manager = WorkspaceManagerUseCase()
+            if manager.delete_workspace_item(ws.id, self._current_subpath, name, AppState.drive_service):
+                self._refresh_workspace_assets(ws)
+
+        ModalDialog(
+            self._parent,
+            title="Confirmar Exclusão",
+            message=f"Deseja excluir permanentemente '{name}' do local e do Drive?",
+            on_confirm=do_delete,
+            confirm_label="Excluir"
+        )
+
+    def _move_item_prompt(self, ws, name: str) -> None:
+        from state import AppState
+        from use_cases import WorkspaceManagerUseCase
+        
+        def do_move(dest):
+            manager = WorkspaceManagerUseCase()
+            if manager.move_workspace_item(ws.id, self._current_subpath, dest, name, AppState.drive_service):
+                self._refresh_workspace_assets(ws)
+
+        InputDialog(
+            self._parent,
+            title="Mover Arquivo",
+            prompt="Caminho relativo de destino (deixe vazio para raiz):",
+            callback=do_move,
+            initial_value=self._current_subpath
+        )
 
     def _sync_asset_action(self, ws, asset) -> None:
         from state import AppState
@@ -258,14 +568,14 @@ class WorkspacesPage(DefaultLayout):
         if asset.status.name == "SYNCHRONIZED":
             return
 
-        # Executar em segundo plano para não congelar o Tkinter
         def run():
             manager = WorkspaceManagerUseCase()
             success = manager.sync_asset(
                 workspace_id=ws.id,
                 asset=asset,
                 drive_service=AppState.drive_service,
-                author_email=AppState.user_email
+                author_email=AppState.user_email,
+                subpath=self._current_subpath
             )
             if success:
                 self.after(0, lambda: ModalDialog(
@@ -284,7 +594,6 @@ class WorkspacesPage(DefaultLayout):
                 ))
 
         threading.Thread(target=run, daemon=True).start()
-
 
     def _click_new_workspace(self) -> None:
         from state import AppState
@@ -353,6 +662,8 @@ class WorkspacesPage(DefaultLayout):
                 )
                 return
 
+            suggested_path = os.path.join(self._base_dir_var.get(), name)
+
             from use_cases import WorkspaceManagerUseCase
             manager = WorkspaceManagerUseCase()
             manager.create_workspace(
@@ -360,7 +671,8 @@ class WorkspacesPage(DefaultLayout):
                 description=desc,
                 engine=engine,
                 owner=AppState.user_email,
-                drive_service=AppState.drive_service
+                drive_service=AppState.drive_service,
+                local_path=suggested_path
             )
             modal.destroy()
             self._refresh_workspaces()
@@ -397,36 +709,73 @@ class WorkspacesPage(DefaultLayout):
     def _upload_asset_to_workspace(self) -> None:
         if not self._selected_workspace_id:
             return
-        path = filedialog.askopenfilename(title="Selecionar Asset")
-        if not path:
+
+        from use_cases import WorkspaceManagerUseCase
+        manager = WorkspaceManagerUseCase()
+        ws = manager.get_workspace_by_id(self._selected_workspace_id)
+        if not ws or not ws.local_path:
             return
 
-        name = path.replace("\\", "/").split("/")[-1]
-        from domain import Asset
-        from state import AppState
-        from use_cases import WorkspaceManagerUseCase
+        src_path = filedialog.askopenfilename(title="Selecionar Asset para Enviar")
+        if not src_path:
+            return
 
-        manager = WorkspaceManagerUseCase()
-        new_asset = Asset(name=name, local_path=path, size=1024 * 50)
+        filename = os.path.basename(src_path)
+        dest_path = os.path.join(ws.local_path, self._current_subpath, filename)
 
-        # Add to workspace and emit alert
-        manager.notify_asset_added(
-            self._selected_workspace_id,
-            AppState.user_email,
-            new_asset,
-            AppState.drive_service
-        )
+        # 1. Copiar arquivo localmente para a pasta do workspace
+        try:
+            shutil.copy2(src_path, dest_path)
+        except Exception as e:
+            ModalDialog(
+                self._parent,
+                title="Erro Local",
+                message=f"Não foi possível copiar o arquivo localmente: {e}",
+                cancel_label="Fechar"
+            )
+            return
 
-        ModalDialog(
-            self._parent,
-            title="🔔 ALERTA DE WORKSPACE EMITIDO!",
-            message=f"O asset '{name}' foi enviado ao workspace.\n\nUm alerta visual foi emitido para todos os membros conectados puxarem a atualização!",
-            cancel_label="Entendido",
-        )
+        # 2. Adicionar na lista de uploads ativos (caminho relativo)
+        rel_key = os.path.join(self._current_subpath, filename).replace("\\", "/")
+        self._uploading_files.add(rel_key)
 
-        ws = manager.get_workspace_by_id(self._selected_workspace_id)
-        if ws:
-            self._refresh_workspace_assets(ws)
+        # Atualizar a UI imediatamente para exibir o card transparente "Enviando..."
+        self._refresh_workspace_assets(ws)
+
+        # 3. Fazer upload real no Drive em background e emitir notificação
+        def run_upload():
+            from state import AppState
+            success = manager.upload_and_notify_asset(
+                workspace_id=ws.id,
+                subpath=self._current_subpath,
+                filename=filename,
+                local_path=dest_path,
+                drive_service=AppState.drive_service,
+                author_email=AppState.user_email
+            )
+            
+            # Remover dos uploads ativos
+            self._uploading_files.discard(rel_key)
+            
+            if success:
+                self.after(0, lambda: ModalDialog(
+                    self._parent,
+                    title="Sucesso",
+                    message=f"Arquivo '{filename}' copiado e sincronizado com o Drive com sucesso!",
+                    cancel_label="Fechar"
+                ))
+            else:
+                self.after(0, lambda: ModalDialog(
+                    self._parent,
+                    title="Erro de Envio",
+                    message=f"O arquivo '{filename}' foi copiado localmente, mas falhou ao enviar ao Drive.",
+                    cancel_label="Fechar"
+                ))
+            # Atualizar a UI para tornar o card sólido/finalizado
+            self.after(0, lambda: self._refresh_workspace_assets(ws))
+
+        threading.Thread(target=run_upload, daemon=True).start()
+
 
     def _delete_workspace_action(self) -> None:
         if not self._selected_workspace_id:

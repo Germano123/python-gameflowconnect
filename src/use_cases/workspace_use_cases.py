@@ -184,14 +184,67 @@ class WorkspaceManagerUseCase:
                 members = metadata.get("members", [])
 
                 if user_email in members:
+                    # Verificar se está ignorado
+                    conn = self._db.get_connection()
+                    try:
+                        cursor = conn.execute("SELECT 1 FROM ignored_workspaces WHERE id = ?", (ws_id,))
+                        ignored = cursor.fetchone() is not None
+                    finally:
+                        conn.close()
+
+                    if ignored:
+                        continue
+
                     existing = self.get_workspace_by_id(ws_id)
                     if not existing:
+
                         name = metadata.get("name", "Workspace Compartilhado")
                         desc = metadata.get("description", "")
                         engine = metadata.get("engine", "Godot")
                         owner = metadata.get("owner", "")
                         created_date = metadata.get("created_at", datetime.now().strftime("%Y-%m-%d"))
-                        local_path = os.path.abspath(f"./GameProjects/{name}")
+
+                        from state import AppState
+                        local_path = os.path.abspath(os.path.join(AppState.local_base_dir, name))
+
+
+                        # Criar pasta física local do workspace
+                        os.makedirs(local_path, exist_ok=True)
+                        gameflow_dir = os.path.join(local_path, ".gameflow")
+                        os.makedirs(gameflow_dir, exist_ok=True)
+
+                        # Criar manifest.json se não existir
+                        manifest_path = os.path.join(gameflow_dir, "manifest.json")
+                        if not os.path.exists(manifest_path):
+                            import json
+                            manifest_data = {
+                                "id": ws_id,
+                                "name": name,
+                                "description": desc,
+                                "engine": engine,
+                                "owner": owner,
+                                "created_at": created_date,
+                                "drive_folder_id": drive_folder_id,
+                                "members": members
+                            }
+                            with open(manifest_path, "w", encoding="utf-8") as f:
+                                json.dump(manifest_data, f, indent=4, ensure_ascii=False)
+
+                        # Criar config.json se não existir
+                        config_path = os.path.join(gameflow_dir, "config.json")
+                        if not os.path.exists(config_path):
+                            import json
+                            config_data = {
+                                "workspace_id": ws_id,
+                                "engine": engine,
+                                "google_drive_folder_id": drive_folder_id,
+                                "preferencias": {
+                                    "auto_sync": False,
+                                    "intervalo_sync_minutos": 15
+                                }
+                            }
+                            with open(config_path, "w", encoding="utf-8") as f:
+                                json.dump(config_data, f, indent=4, ensure_ascii=False)
 
                         conn = self._db.get_connection()
                         try:
@@ -202,6 +255,7 @@ class WorkspaceManagerUseCase:
                             conn.commit()
                         finally:
                             conn.close()
+
 
                         discovered.append(Workspace(
                             id=ws_id,
@@ -265,14 +319,42 @@ class WorkspaceManagerUseCase:
         return None
 
     def delete_workspace(self, workspace_id: str) -> bool:
-        """Exclui o workspace localmente no SQLite."""
+        """Exclui o workspace localmente no SQLite, deleta a pasta física e marca como ignorado."""
         conn = self._db.get_connection()
         try:
+            # Obter local_path antes de deletar
+            cursor = conn.execute("SELECT local_path FROM local_workspaces WHERE id = ?", (workspace_id,))
+            row = cursor.fetchone()
+            local_path = row["local_path"] if row else None
+
+            # Deletar assets e workspace
+            conn.execute("DELETE FROM local_assets WHERE workspace_id = ?", (workspace_id,))
             conn.execute("DELETE FROM local_workspaces WHERE id = ?", (workspace_id,))
+            
+            # Adicionar na lista de ignorados para evitar redescoberta automática do Drive
+            conn.execute("INSERT OR REPLACE INTO ignored_workspaces (id) VALUES (?)", (workspace_id,))
             conn.commit()
+
+            # Deletar pasta local física (.gameflow e arquivos)
+            if local_path and os.path.exists(local_path):
+                import shutil
+                try:
+                    shutil.rmtree(local_path)
+                except Exception as e:
+                    print(f"Erro ao remover pasta física local na exclusão: {e}")
         finally:
             conn.close()
         return True
+
+    def unignore_workspace(self, workspace_id: str) -> None:
+        """Remove o workspace da lista de ignorados quando importado ou aceito manualmente."""
+        conn = self._db.get_connection()
+        try:
+            conn.execute("DELETE FROM ignored_workspaces WHERE id = ?", (workspace_id,))
+            conn.commit()
+        finally:
+            conn.close()
+
 
     def notify_asset_added(self, workspace_id: str, author: str, asset: Asset, drive_service) -> WorkspaceNotification:
         """
@@ -374,37 +456,61 @@ class WorkspaceManagerUseCase:
             conn.close()
         return assets
 
-    def get_workspace_assets_sync_status(self, workspace_id: str, drive_service) -> List[Asset]:
+    def get_remote_subfolder_id(self, parent_folder_id: str, subpath: str, drive_service) -> Optional[str]:
+        if not subpath:
+            return parent_folder_id
+        if not drive_service or not drive_service.is_authenticated or parent_folder_id == "demo_folder":
+            return "demo_folder"
+
+        parts = [p for p in subpath.replace("\\", "/").split("/") if p]
+        current_id = parent_folder_id
+        for part in parts:
+            query = f"'{current_id}' in parents and name = '{part}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
+            results = drive_service._service.files().list(q=query, fields="files(id)").execute()
+            files = results.get("files", [])
+            if files:
+                current_id = files[0].get("id")
+            else:
+                return None
+        return current_id
+
+    def get_workspace_assets_sync_status(self, workspace_id: str, drive_service, subpath: str = "") -> List[Asset]:
         """
-        Retorna a lista unificada de assets detectados localmente no diretório do workspace
-        e remotamente no Google Drive, com seus respectivos status (SYNCHRONIZED, REMOTE_ONLY, LOCAL_ONLY).
+        Retorna a lista unificada de assets e pastas detectados localmente no diretório do workspace (dentro de subpath)
+        e remotamente no Google Drive, mapeando os status correspondentes.
         """
         ws = self.get_workspace_by_id(workspace_id)
-        if not ws:
+        if not ws or not ws.local_path:
             return []
 
-        # 1. Escanear arquivos locais no workspace (excluindo .gameflow)
-        local_files = {}
-        if ws.local_path and os.path.exists(ws.local_path):
-            for root, dirs, files in os.walk(ws.local_path):
-                if ".gameflow" in root:
-                    continue
-                for f in files:
-                    full_path = os.path.join(root, f)
-                    try:
-                        size = os.path.getsize(full_path)
-                        local_files[f] = {
-                            "path": full_path,
-                            "size": size
-                        }
-                    except Exception:
-                        pass
+        target_dir = os.path.join(ws.local_path, subpath)
+        os.makedirs(target_dir, exist_ok=True)
 
-        # 2. Obter arquivos remotos da pasta correspondente no Google Drive
+        # 1. Escanear diretório local atual
+        local_files = {}
+        for entry in os.scandir(target_dir):
+            if entry.name == ".gameflow":
+                continue
+            if entry.is_dir():
+                local_files[entry.name] = {
+                    "is_dir": True,
+                    "path": entry.path,
+                    "size": 0
+                }
+            else:
+                local_files[entry.name] = {
+                    "is_dir": False,
+                    "path": entry.path,
+                    "size": entry.stat().st_size
+                }
+
+        # 2. Obter arquivos remotos da subpasta correspondente no Drive
         remote_assets = []
-        if drive_service and drive_service.is_authenticated and ws.drive_folder_id != "demo_folder":
+        remote_parent_id = self.get_remote_subfolder_id(ws.drive_folder_id, subpath, drive_service)
+
+        if drive_service and drive_service.is_authenticated and remote_parent_id:
             try:
-                query = f"'{ws.drive_folder_id}' in parents and trashed = false"
+                query = f"'{remote_parent_id}' in parents and trashed = false"
                 results = drive_service._service.files().list(q=query, fields="files(id, name, mimeType, size, modifiedTime)").execute()
                 files = results.get("files", [])
                 for f in files:
@@ -422,7 +528,6 @@ class WorkspaceManagerUseCase:
                     if name in local_files:
                         status = SyncStatus.SYNCHRONIZED
                         local_path = local_files[name]["path"]
-                        # Remove da lista local para sabermos quais são apenas locais
                         del local_files[name]
 
                     remote_assets.append(Asset(
@@ -435,37 +540,190 @@ class WorkspaceManagerUseCase:
                         modified_time=modified
                     ))
             except Exception as e:
-                print(f"Erro ao obter arquivos remotos no sync status: {e}")
+                print(f"Erro ao obter arquivos remotos no subpath {subpath}: {e}")
 
         # 3. Adicionar arquivos locais pendentes de envio
         for name, info in local_files.items():
+            mime = "application/vnd.google-apps.folder" if info["is_dir"] else "application/octet-stream"
             remote_assets.append(Asset(
                 id=None,
                 name=name,
-                mime_type="application/octet-stream",
+                mime_type=mime,
                 size=info["size"],
                 local_path=info["path"],
                 status=SyncStatus.LOCAL_ONLY,
-                modified_time=datetime.now().strftime("%Y-%m-%d")
+                modified_time=datetime.now().strftime("%Y-%m-%d %H:%M")
             ))
 
+        # Ordenar pastas primeiro, depois arquivos
+        remote_assets.sort(key=lambda x: (x.mime_type != "application/vnd.google-apps.folder", x.name.lower()))
         return remote_assets
 
-    def sync_asset(self, workspace_id: str, asset: Asset, drive_service, author_email: str) -> bool:
+    def create_workspace_folder(self, workspace_id: str, subpath: str, folder_name: str, drive_service) -> bool:
+        """Cria um diretório local e remoto na estrutura de subpastas."""
+        ws = self.get_workspace_by_id(workspace_id)
+        if not ws or not ws.local_path:
+            return False
+
+        # Criar localmente
+        local_dir = os.path.join(ws.local_path, subpath, folder_name)
+        os.makedirs(local_dir, exist_ok=True)
+
+        # Criar no Drive
+        if drive_service and drive_service.is_authenticated and ws.drive_folder_id != "demo_folder":
+            try:
+                parent_id = self.get_remote_subfolder_id(ws.drive_folder_id, subpath, drive_service)
+                if parent_id:
+                    # Verificar se já existe remoto
+                    query = f"'{parent_id}' in parents and name = '{folder_name}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
+                    results = drive_service._service.files().list(q=query, fields="files(id)").execute()
+                    if not results.get("files"):
+                        body = {
+                            "name": folder_name,
+                            "mimeType": "application/vnd.google-apps.folder",
+                            "parents": [parent_id]
+                        }
+                        drive_service._service.files().create(body=body).execute()
+            except Exception as e:
+                print(f"Erro ao criar pasta remota no Drive: {e}")
+        return True
+
+    def rename_workspace_item(self, workspace_id: str, subpath: str, old_name: str, new_name: str, drive_service) -> bool:
+        """Renomeia um arquivo ou pasta local e atualiza correspondência remota se houver."""
+        ws = self.get_workspace_by_id(workspace_id)
+        if not ws or not ws.local_path:
+            return False
+
+        local_old = os.path.join(ws.local_path, subpath, old_name)
+        local_new = os.path.join(ws.local_path, subpath, new_name)
+
+        if os.path.exists(local_old):
+            try:
+                os.rename(local_old, local_new)
+            except Exception as e:
+                print(f"Erro ao renomear item localmente: {e}")
+                return False
+
+        # Renomear no Drive
+        if drive_service and drive_service.is_authenticated and ws.drive_folder_id != "demo_folder":
+            try:
+                parent_id = self.get_remote_subfolder_id(ws.drive_folder_id, subpath, drive_service)
+                if parent_id:
+                    query = f"'{parent_id}' in parents and name = '{old_name}' and trashed = false"
+                    results = drive_service._service.files().list(q=query, fields="files(id)").execute()
+                    files = results.get("files", [])
+                    if files:
+                        fid = files[0].get("id")
+                        drive_service._service.files().update(fileId=fid, body={"name": new_name}).execute()
+            except Exception as e:
+                print(f"Erro ao renomear item no Drive: {e}")
+        return True
+
+    def delete_workspace_item(self, workspace_id: str, subpath: str, name: str, drive_service) -> bool:
+        """Remove arquivo ou diretório localmente e envia comando de exclusão/lixeira no Drive."""
+        ws = self.get_workspace_by_id(workspace_id)
+        if not ws or not ws.local_path:
+            return False
+
+        local_path = os.path.join(ws.local_path, subpath, name)
+        if os.path.exists(local_path):
+            try:
+                if os.path.isdir(local_path):
+                    import shutil
+                    shutil.rmtree(local_path)
+                else:
+                    os.remove(local_path)
+            except Exception as e:
+                print(f"Erro ao remover local: {e}")
+                return False
+
+        # Remover no SQLite local cache
+        conn = self._db.get_connection()
+        try:
+            conn.execute("DELETE FROM local_assets WHERE workspace_id = ? AND name = ?", (workspace_id, name))
+            conn.commit()
+        finally:
+            conn.close()
+
+        # Enviar para lixeira no Drive
+        if drive_service and drive_service.is_authenticated and ws.drive_folder_id != "demo_folder":
+            try:
+                parent_id = self.get_remote_subfolder_id(ws.drive_folder_id, subpath, drive_service)
+                if parent_id:
+                    query = f"'{parent_id}' in parents and name = '{name}' and trashed = false"
+                    results = drive_service._service.files().list(q=query, fields="files(id)").execute()
+                    files = results.get("files", [])
+                    if files:
+                        fid = files[0].get("id")
+                        drive_service._service.files().update(fileId=fid, body={"trashed": True}).execute()
+            except Exception as e:
+                print(f"Erro ao mandar item para a lixeira no Drive: {e}")
+        return True
+
+    def move_workspace_item(self, workspace_id: str, source_subpath: str, dest_subpath: str, name: str, drive_service) -> bool:
+        """Move o arquivo localmente e reorganiza as pastas correspondentes no Drive."""
+        ws = self.get_workspace_by_id(workspace_id)
+        if not ws or not ws.local_path:
+            return False
+
+        local_src = os.path.join(ws.local_path, source_subpath, name)
+        local_dest_dir = os.path.join(ws.local_path, dest_subpath)
+        local_dest = os.path.join(local_dest_dir, name)
+
+        os.makedirs(local_dest_dir, exist_ok=True)
+        if os.path.exists(local_src):
+            try:
+                import shutil
+                shutil.move(local_src, local_dest)
+            except Exception as e:
+                print(f"Erro ao mover arquivo localmente: {e}")
+                return False
+
+        # Atualizar no SQLite local cache
+        conn = self._db.get_connection()
+        try:
+            conn.execute("UPDATE local_assets SET local_path = ? WHERE workspace_id = ? AND name = ?", (local_dest, workspace_id, name))
+            conn.commit()
+        finally:
+            conn.close()
+
+        # Mover no Drive
+        if drive_service and drive_service.is_authenticated and ws.drive_folder_id != "demo_folder":
+            try:
+                src_parent_id = self.get_remote_subfolder_id(ws.drive_folder_id, source_subpath, drive_service)
+                dest_parent_id = self.get_remote_subfolder_id(ws.drive_folder_id, dest_subpath, drive_service)
+
+                if src_parent_id and dest_parent_id:
+                    query = f"'{src_parent_id}' in parents and name = '{name}' and trashed = false"
+                    results = drive_service._service.files().list(q=query, fields="files(id)").execute()
+                    files = results.get("files", [])
+                    if files:
+                        fid = files[0].get("id")
+                        # Mover mudando a referência de parents no Drive
+                        self._service.files().update(
+                            fileId=fid,
+                            addParents=dest_parent_id,
+                            removeParents=src_parent_id,
+                            fields="id, parents"
+                        ).execute()
+            except Exception as e:
+                print(f"Erro ao mover no Drive: {e}")
+        return True
+
+    def sync_asset(self, workspace_id: str, asset: Asset, drive_service, author_email: str, subpath: str = "") -> bool:
         """
-        Sincroniza um asset individual:
-        - REMOTE_ONLY (Nuvem): baixa do Drive para a pasta local do workspace.
-        - LOCAL_ONLY (Local): envia do local para a pasta do Drive e emite notificação.
+        Sincroniza um asset individual no subcaminho atual:
+        - REMOTE_ONLY (Nuvem): baixa do Drive para a pasta local.
+        - LOCAL_ONLY (Local): envia do local para a pasta do Drive.
         """
         ws = self.get_workspace_by_id(workspace_id)
-        if not ws:
+        if not ws or not ws.local_path:
             return False
 
         # Sincronização de arquivo da nuvem para o local
         if asset.status == SyncStatus.REMOTE_ONLY and drive_service and drive_service.is_authenticated:
             try:
-                dest_path = os.path.join(ws.local_path, asset.name)
-                # Baixar usando a API do Drive
+                dest_path = os.path.join(ws.local_path, subpath, asset.name)
                 request = drive_service._service.files().get_media(fileId=asset.id)
                 with open(dest_path, "wb") as f:
                     f.write(request.execute())
@@ -488,23 +746,91 @@ class WorkspaceManagerUseCase:
         # Sincronização de arquivo local para a nuvem
         elif asset.status == SyncStatus.LOCAL_ONLY and drive_service and drive_service.is_authenticated:
             try:
-                # Fazer upload para a pasta correspondente no Drive
-                from googleapiclient.http import MediaFileUpload
-                file_metadata = {
-                    'name': asset.name,
-                    'parents': [ws.drive_folder_id]
-                }
-                media = MediaFileUpload(asset.local_path, mimetype=asset.mime_type or 'application/octet-stream', resumable=True)
-                file = drive_service._service.files().create(body=file_metadata, media_body=media, fields='id').execute()
-                uploaded_id = file.get('id')
+                parent_id = self.get_remote_subfolder_id(ws.drive_folder_id, subpath, drive_service)
+                if not parent_id:
+                    return False
 
-                # Notificar equipe e registrar no SQLite local
-                asset.id = uploaded_id
-                self.notify_asset_added(workspace_id, author_email, asset, drive_service)
-                return True
+                if asset.mime_type == "application/vnd.google-apps.folder":
+                    # Criar pasta no Drive
+                    body = {
+                        "name": asset.name,
+                        "mimeType": "application/vnd.google-apps.folder",
+                        "parents": [parent_id]
+                    }
+                    drive_service._service.files().create(body=body).execute()
+                    return True
+                else:
+                    # Enviar arquivo
+                    from googleapiclient.http import MediaFileUpload
+                    file_metadata = {
+                        'name': asset.name,
+                        'parents': [parent_id]
+                    }
+                    media = MediaFileUpload(asset.local_path, mimetype=asset.mime_type or 'application/octet-stream', resumable=True)
+                    file = drive_service._service.files().create(body=file_metadata, media_body=media, fields='id').execute()
+                    uploaded_id = file.get('id')
+
+                    asset.id = uploaded_id
+                    self.notify_asset_added(workspace_id, author_email, asset, drive_service)
+                    return True
             except Exception as e:
                 print(f"Erro ao enviar asset no sync: {e}")
                 return False
 
         return False
+
+    def upload_and_notify_asset(self, workspace_id: str, subpath: str, filename: str, local_path: str, drive_service, author_email: str) -> bool:
+        """
+        Realiza o upload real de um arquivo de documentos ou mídias para a subpasta no Google Drive,
+        registra o asset no SQLite local e emite uma notificação em lote para a equipe.
+        """
+        ws = self.get_workspace_by_id(workspace_id)
+        if not ws:
+            return False
+        try:
+            parent_id = self.get_remote_subfolder_id(ws.drive_folder_id, subpath, drive_service)
+            if not parent_id:
+                return False
+
+            # Enviar arquivo
+            from googleapiclient.http import MediaFileUpload
+            file_metadata = {
+                'name': filename,
+                'parents': [parent_id]
+            }
+            
+            import mimetypes
+            mime_type, _ = mimetypes.guess_type(local_path)
+            if not mime_type:
+                mime_type = "application/octet-stream"
+
+            media = MediaFileUpload(local_path, mimetype=mime_type, resumable=True)
+            file = drive_service._service.files().create(body=file_metadata, media_body=media, fields='id, size, mimeType').execute()
+            uploaded_id = file.get('id')
+
+            # Anexar no SQLite local cache
+            size = int(file.get("size", 0)) or os.path.getsize(local_path)
+            mime = file.get("mimeType", mime_type)
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+            conn = self._db.get_connection()
+            try:
+                conn.execute(
+                    "INSERT OR REPLACE INTO local_assets (id, workspace_id, name, mime_type, size, local_path, status, last_sync) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    (uploaded_id, workspace_id, filename, mime, size, local_path, "SYNCHRONIZED", timestamp)
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
+            # Enviar alerta/notificação de equipe
+            from domain import Asset
+            asset = Asset(id=uploaded_id, name=filename, mime_type=mime, size=size, local_path=local_path)
+            self.notify_asset_added(workspace_id, author_email, asset, drive_service)
+            return True
+        except Exception as e:
+            print(f"Erro no upload do asset inserido: {e}")
+            return False
+
+
 

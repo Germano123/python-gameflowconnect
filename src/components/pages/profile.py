@@ -291,7 +291,9 @@ class ProfilePage(DefaultLayout):
                     "INSERT INTO local_workspaces (id, name, description, engine, drive_folder_id, local_path, owner, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                     (invite["id"], invite["name"], invite["description"], invite["engine"], invite["drive_folder_id"], local_dir, invite["owner"], invite["created_at"])
                 )
+                conn.execute("DELETE FROM ignored_workspaces WHERE id = ?", (invite["id"],))
                 conn.commit()
+
 
             ModalDialog(
                 self._parent,
