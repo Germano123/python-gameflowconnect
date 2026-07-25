@@ -8,11 +8,21 @@ class LocalDatabase:
     """
     DB_NAME = "gameflow_local.db"
 
-    def __init__(self, data_dir: str = "data"):
-        self._data_dir = data_dir
+    def __init__(self, data_dir: str = None):
+        if data_dir is None:
+            import sys
+            if getattr(sys, "frozen", False):
+                base_dir = os.path.dirname(sys.executable)
+            else:
+                base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+            self._data_dir = os.path.join(base_dir, "data")
+        else:
+            self._data_dir = data_dir
+
         os.makedirs(self._data_dir, exist_ok=True)
         self._db_path = os.path.join(self._data_dir, self.DB_NAME)
         self.initialize_tables()
+
 
     def get_connection(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self._db_path)

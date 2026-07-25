@@ -17,17 +17,24 @@ token.json
 *.env
 .env
 
-# Build / dist
+# Build / dist / output
 *.egg-info/
 dist/
 build/
+Output/
 *.whl
 
-# Test cache
+
+# Test cache & data
 .pytest_cache/
 .coverage
 htmlcov/
 data/
+data_test/
+
+# PyInstaller Spec
+*.spec
+
 
 # IDE
 .vscode/
@@ -38,3 +45,6 @@ site/
 
 # Backup files
 *.bak
+
+# Windows build install files
+*.iss

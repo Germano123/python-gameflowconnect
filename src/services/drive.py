@@ -14,8 +14,20 @@ from googleapiclient.http import MediaFileUpload, MediaInMemoryUpload
 
 SCOPES = ["https://www.googleapis.com/auth/drive"]
 
-TOKEN_PATH = os.path.join("data", "token.json")
-CREDENTIALS_PATH = os.path.join("data", "credentials.json")
+def get_data_filepath(filename: str) -> str:
+    import sys
+    if getattr(sys, "frozen", False):
+        base_dir = os.path.dirname(sys.executable)
+    else:
+        base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    
+    data_dir = os.path.join(base_dir, "data")
+    os.makedirs(data_dir, exist_ok=True)
+    return os.path.join(data_dir, filename)
+
+TOKEN_PATH = get_data_filepath("token.json")
+CREDENTIALS_PATH = get_data_filepath("credentials.json")
+
 
 
 

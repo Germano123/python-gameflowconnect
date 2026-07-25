@@ -65,10 +65,11 @@ class HomePage(ctk.CTkFrame):
         # Version badge
         ctk.CTkLabel(
             card,
-            text="v2.0  ·  Open Beta",
+            text="v2.0.0  ·  Alpha",
             font=ctk.CTkFont(family="Arial", size=10),
             text_color="#4a7a94",
         ).grid(row=4, column=0, pady=(6, 0))
+
 
         # ── Primary action: full login ───────────────────────────────────
         ButtonComponent(
