@@ -1,7 +1,9 @@
 # GameFlow Connect - Arquitetura e Especificação Funcional
 
-> **Versão:** 1.0
-> **Status:** Em desenvolvimento
+> **Versão:** v2.0.0-alpha
+> **Data:** 25 de Julho de 2026
+> **Status:** Alfa
+
 
 ---
 
