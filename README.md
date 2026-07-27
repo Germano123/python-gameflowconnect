@@ -133,7 +133,28 @@ To connect GameFlowConnect with real Google Drive API storage, follow these setu
    python -m unittest discover -s tests
    ```
 
+
 ---
+
+## 📦 Packaging & Windows Installer
+
+GameFlowConnect can be packaged into a standalone Windows executable and installer using PyInstaller and Inno Setup:
+
+1. **Build Windows Executable**:
+   Run the build script to compile the application into a standalone folder:
+   ```bash
+   python build_exe.py
+   ```
+   This will generate a portable compiled application under the `dist/GameFlowConnect/` folder.
+
+2. **Generate Setup Installer**:
+   To compile a professional setup installer (`GameFlowConnect_Setup.exe`), use [Inno Setup](https://jrsoftware.org/isdl.php). Open the `GameFlowConnect.iss` script in the Inno Setup Compiler and click **Compile** (F9).
+   
+> [!NOTE]
+> This project is open-source and non-commercial. The Windows installer generated via Inno Setup is intended for non-commercial distribution and testing purposes.
+
+---
+
 
 ## 🎨 Visual Identity
 The project's color scheme consists of:
