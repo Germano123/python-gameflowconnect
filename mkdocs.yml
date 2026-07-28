@@ -54,6 +54,7 @@ nav:
       - Architecture: technical_details/architecture.md
       - UI Design: technical_details/ui_design.md
       - Integrations: technical_details/integrations.md
+      - Sync Architecture: technical_details/sync_architecture.md
   - Collaboration:
       - Contributing Guide: collaboration/contributing.md
       - Roadmap: collaboration/roadmap.md
