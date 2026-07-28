@@ -247,5 +247,43 @@ class TestWorkspaceManagement(unittest.TestCase):
         )
         self.assertFalse(success)
 
+    def test_scan_and_import_local_workspaces(self):
+        # 1. Preparar pastas de workspace simuladas no disco
+        test_scan_dir = os.path.join(self.test_db_dir, "Scan_Base_Dir")
+        os.makedirs(test_scan_dir, exist_ok=True)
+        
+        ws_folder = os.path.join(test_scan_dir, "My_Existing_RPG_Game")
+        gameflow_meta_dir = os.path.join(ws_folder, ".gameflow")
+        os.makedirs(gameflow_meta_dir, exist_ok=True)
+        
+        manifest_data = {
+            "id": "ws_scan_test_123",
+            "name": "My Existing RPG Game",
+            "description": "Um RPG existente no disco",
+            "engine": "Unity",
+            "owner": "old_dev@gameflow.io",
+            "drive_folder_id": "drive_folder_scan_123",
+            "created_at": "2026-01-01"
+        }
+        
+        import json
+        with open(os.path.join(gameflow_meta_dir, "manifest.json"), "w", encoding="utf-8") as f:
+            json.dump(manifest_data, f)
+            
+        # 2. Executar escaneamento
+        imported = self.manager.scan_and_import_local_workspaces(test_scan_dir)
+        self.assertEqual(len(imported), 1)
+        self.assertEqual(imported[0].id, "ws_scan_test_123")
+        self.assertEqual(imported[0].name, "My Existing RPG Game")
+        
+        # 3. Confirmar que agora está listado no banco local
+        workspaces = self.manager.list_workspaces()
+        self.assertTrue(any(w.id == "ws_scan_test_123" for w in workspaces))
+        
+        # 4. Escanear novamente não deve importar duplicatas
+        imported_again = self.manager.scan_and_import_local_workspaces(test_scan_dir)
+        self.assertEqual(len(imported_again), 0)
+
+
 
 

@@ -12,12 +12,20 @@ class LocalDatabase:
         if data_dir is None:
             import sys
             if getattr(sys, "frozen", False):
-                base_dir = os.path.dirname(sys.executable)
+                if os.name == "nt":
+                    local_appdata = os.environ.get("LOCALAPPDATA")
+                    if local_appdata:
+                        self._data_dir = os.path.join(local_appdata, "GameFlowConnect")
+                    else:
+                        self._data_dir = os.path.expanduser("~/.gameflowconnect")
+                else:
+                    self._data_dir = os.path.expanduser("~/.gameflowconnect")
             else:
                 base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-            self._data_dir = os.path.join(base_dir, "data")
+                self._data_dir = os.path.join(base_dir, "data")
         else:
             self._data_dir = data_dir
+
 
         os.makedirs(self._data_dir, exist_ok=True)
         self._db_path = os.path.join(self._data_dir, self.DB_NAME)

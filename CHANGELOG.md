@@ -27,7 +27,7 @@ Esta versão alfa marca a transição da arquitetura original baseada em projeto
 - **Varredura de Compartilhados**: Correção na busca de manifestos compartilhados por herança de permissões no Google Drive, buscando por `"name = 'manifest.json' and trashed = false"`.
 - **Prevenção de Cliques em FileCard**: Correção na propagação de cliques dos botões de ação rápidos (Rename, Delete) no CustomTkinter, evitando disparar cliques gerais do corpo do card.
 - **Estado Ativo no SideMenu**: Correção no destaque da tela ativa no menu de navegação lateral durante a transição pelo roteador geral.
-- **Segurança no Repositório (.gitignore)**: Atualização do `.gitignore` para ignorar o banco de teste `data_test/`, os arquivos de spec do PyInstaller (`*.spec`), e o diretório de saída do instalador (`Output/`).
+- **Segurança no Repositório (.gitignore)**: Atualização do `.gitignore` para ignorar o banco de teste `data_test/`, os arquivos de spec do PyInstaller (`*.spec`), e o diretório de saída do instalador (`output/`).
 
 ### Removido
 - Removido o rodapé e a opção de "Modo Demo" na página de login e home.

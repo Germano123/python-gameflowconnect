@@ -57,7 +57,32 @@ This guide provides solutions to common issues encountered while using GameFlow 
 - Restart the application if it becomes unresponsive.
 - Check for application updates that may include performance fixes.
 
+### **6. Inno Setup Installer Fails with Error 4551 (Access Control Policy)**
+**Cause:** Windows Defender Smart App Control, AppLocker, or a Software Restriction Policy (SRP) is blocking the execution of temporary installer files inside the default user `%TEMP%` directory (e.g., `ERROR_ACCESS_DISABLED_BY_POLICY` / `0x11C7` / `4551`).
+
+**Solution:**
+- **Alternative 1: Use the Portable Package (Recommended)**
+  Instead of running the installation wizard, simply distribute or use the compressed portable ZIP version generated at `dist/GameFlowConnect_v<version>_Portable.zip`. Extract the ZIP to any directory (e.g., `C:\GameFlowConnect`) and run `GameFlowConnect.exe` directly. Since it does not extract temporary stubs to the user Temp directory, it completely bypasses the access policy blocks.
+  
+- **Alternative 2: Override the Temp Directory via CMD**
+  If you still want to run the installer, override the temporary directory variables for the installation session using a command prompt:
+  1. Open **Command Prompt** (CMD).
+  2. Create a temporary folder on the root of your drive (which is usually not restricted by temp-folder policies):
+     ```cmd
+     mkdir C:\Temp
+     ```
+  3. Override the session's temp variables and run the installer:
+     ```cmd
+     set TEMP=C:\Temp
+     set TMP=C:\Temp
+     cd path\to\installer
+     GameFlowConnect_Setup.exe
+     ```
+  This redirects the temporary files extraction to `C:\Temp`, bypassing the policy block on the user AppData Temp folder.
+
 ---
+
+
 
 ## **Contact and Reporting Issues**
 If the above solutions do not resolve your issue, you can:

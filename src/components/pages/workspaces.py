@@ -202,7 +202,7 @@ class WorkspacesPage(DefaultLayout):
         self._assets_scroll.grid(row=2, column=0, sticky="nsew", padx=6, pady=6)
 
     def on_show(self) -> None:
-        self._refresh_workspaces()
+        self._refresh_workspaces(scan=True)
         # Executar descoberta de workspaces compartilhados em background
         threading.Thread(target=self._discover_shared, daemon=True).start()
 
@@ -214,14 +214,25 @@ class WorkspacesPage(DefaultLayout):
                 manager = WorkspaceManagerUseCase()
                 discovered = manager.discover_shared_workspaces(AppState.user_email, AppState.drive_service)
                 if discovered:
-                    self.after(0, self._refresh_workspaces)
+                    self.after(0, lambda: self._refresh_workspaces(scan=True))
             except Exception as e:
                 print(f"Erro na descoberta de workspaces em background: {e}")
 
-    def _refresh_workspaces(self) -> None:
+
+    def _refresh_workspaces(self, scan: bool = False) -> None:
         from use_cases import WorkspaceManagerUseCase
+        from state import AppState
         manager = WorkspaceManagerUseCase()
+        
+        # Escanear e importar automaticamente workspaces existentes no PC antes de listar
+        if scan and hasattr(AppState, "local_base_dir") and AppState.local_base_dir:
+            try:
+                manager.scan_and_import_local_workspaces(AppState.local_base_dir)
+            except Exception as e:
+                print(f"Erro ao escanear workspaces locais: {e}")
+                
         workspaces = manager.list_workspaces()
+
 
         for w in self._workspaces_scroll.winfo_children():
             w.destroy()
@@ -232,12 +243,20 @@ class WorkspacesPage(DefaultLayout):
             return
 
         for ws in workspaces:
+            is_selected = (ws.id == self._selected_workspace_id)
+            normal_bg = "#1e3743" if is_selected else "#1a3040"
+            hover_bg = "#244252" if is_selected else "#21394c"
+            pressed_bg = "#152530" if is_selected else "#11202b"
+            
+            normal_border = "#00aa00" if is_selected else "#2d4a5a"
+            hover_border = "#00ff00" if is_selected else "#4a6e84"
+
             card = ctk.CTkFrame(
                 self._workspaces_scroll,
                 corner_radius=8,
                 border_width=1,
-                border_color="#00aa00" if ws.id == self._selected_workspace_id else "#2d4a5a",
-                fg_color="#1e3743" if ws.id == self._selected_workspace_id else "#1a3040",
+                border_color=normal_border,
+                fg_color=normal_bg,
             )
             card.pack(fill="x", padx=4, pady=4)
 
@@ -280,14 +299,29 @@ class WorkspacesPage(DefaultLayout):
             )
             sub_lbl.pack(fill="x", padx=10, pady=(0, 8))
 
-            card.bind("<Button-1>", lambda _, w_item=ws: self._select_workspace(w_item))
-            row_frame.bind("<Button-1>", lambda _, w_item=ws: self._select_workspace(w_item))
-            lbl.bind("<Button-1>", lambda _, w_item=ws: self._select_workspace(w_item))
-            badge.bind("<Button-1>", lambda _, w_item=ws: self._select_workspace(w_item))
-            sub_lbl.bind("<Button-1>", lambda _, w_item=ws: self._select_workspace(w_item))
+            # Efeitos visuais de hover, click e seleção
+            def on_enter(e, card_widget=card, border=hover_border, bg=hover_bg):
+                if card_widget.winfo_exists():
+                    card_widget.configure(border_color=border, fg_color=bg)
+
+            def on_leave(e, card_widget=card, border=normal_border, bg=normal_bg):
+                if card_widget.winfo_exists():
+                    card_widget.configure(border_color=border, fg_color=bg)
+
+            def on_press(e, card_widget=card, bg=pressed_bg):
+                if card_widget.winfo_exists():
+                    card_widget.configure(fg_color=bg)
+
+            # Bindings recursivos em todos os elementos do card
+            widgets_to_bind = [card, row_frame, lbl, badge, sub_lbl]
+            for widget in widgets_to_bind:
+                widget.bind("<Enter>", lambda e: on_enter(e))
+                widget.bind("<Leave>", lambda e: on_leave(e))
+                widget.bind("<Button-1>", lambda e, w_item=ws: (on_press(e), self._select_workspace(w_item)))
 
         if not self._selected_workspace_id and workspaces:
             self._select_workspace(workspaces[0])
+
 
     def _clear_workspace_details(self) -> None:
         self._selected_workspace_id = None
@@ -298,26 +332,26 @@ class WorkspacesPage(DefaultLayout):
             w.destroy()
 
     def _select_workspace(self, ws) -> None:
-
         self._selected_workspace_id = ws.id
         self._current_subpath = ""  # Sempre resetar para a raiz ao trocar de workspace
         self._ws_title_lbl.configure(text=f"📁 {ws.name}  [Engine: {ws.engine}]")
         members_str = ", ".join(ws.members) if ws.members else ws.owner
         self._ws_desc_lbl.configure(text=f"{ws.description}\nProprietário: {ws.owner}\nMembros: {members_str}")
         self._refresh_workspace_assets(ws)
+        self.after(10, lambda: self._refresh_workspaces(scan=False))
+
+
 
     def _refresh_workspace_assets(self, ws) -> None:
         from use_cases import WorkspaceManagerUseCase
         from state import AppState
+        import threading
 
+        # Limpar área de assets
         for w in self._assets_scroll.winfo_children():
             w.destroy()
 
-        # Obter status dinâmico dos assets locais vs remotos no Drive no subpath atual
-        manager = WorkspaceManagerUseCase()
-        assets = manager.get_workspace_assets_sync_status(ws.id, AppState.drive_service, self._current_subpath)
-
-        # ── Navigation & Folder breadcrumbs ───────────────────────────────
+        # 1. ── Barra de Navegação Superior (Sempre visível para resposta imediata) ───────────────────────────────
         nav_bar = ctk.CTkFrame(self._assets_scroll, fg_color="transparent")
         nav_bar.pack(fill="x", padx=4, pady=(0, 8))
 
@@ -347,49 +381,93 @@ class WorkspacesPage(DefaultLayout):
                 onClick=lambda: self._go_back_directory(ws),
             ).pack(side="right")
 
-        if not assets:
-            ctk.CTkLabel(
-                self._assets_scroll,
-                text="Esta pasta está vazia.\nColoque arquivos na pasta local do projeto ou clique em 'Enviar Asset'.",
-                font=ctk.CTkFont(family="Arial", size=11),
-                text_color="gray50",
-            ).pack(pady=40)
-            return
+        # 2. Indicador de carregamento
+        loading_frame = ctk.CTkFrame(self._assets_scroll, fg_color="transparent")
+        loading_frame.pack(fill="both", expand=True, pady=40)
+        
+        ctk.CTkLabel(
+            loading_frame,
+            text="⏳ Sincronizando com o Google Drive...",
+            font=ctk.CTkFont(family="Arial", size=12),
+            text_color="gray60",
+        ).pack()
 
-        for asset in assets:
-            rel_key = os.path.join(self._current_subpath, asset.name).replace("\\", "/")
-            is_uploading = rel_key in self._uploading_files
+        target_ws_id = ws.id
+        target_subpath = self._current_subpath
 
-            status_txt = "SYNCHRONIZED"
-            if is_uploading:
-                status_txt = "Enviando..."
-            elif asset.status.name == "REMOTE_ONLY":
-                status_txt = "Nuvem"
-            elif asset.status.name == "LOCAL_ONLY":
-                status_txt = "Pendente de Envio"
+        def fetch_assets():
+            try:
+                manager = WorkspaceManagerUseCase()
+                # Chamada pesada de rede em segundo plano
+                assets = manager.get_workspace_assets_sync_status(target_ws_id, AppState.drive_service, target_subpath)
 
-            is_dir = asset.mime_type == "application/vnd.google-apps.folder"
+                def render_results():
+                    # Evitar race condition caso o usuário tenha trocado de workspace/pasta
+                    if not self.winfo_exists() or self._selected_workspace_id != target_ws_id or self._current_subpath != target_subpath:
+                        return
+                    
+                    loading_frame.destroy()
 
-            # Ação de clique principal no corpo do card
-            if is_dir:
-                click_cmd = lambda a=asset: self._enter_folder(ws, a.name)
-            else:
-                click_cmd = lambda a=asset: self._manage_file_modal(ws, a)
+                    if not assets:
+                        ctk.CTkLabel(
+                            self._assets_scroll,
+                            text="Esta pasta está vazia.\nColoque arquivos na pasta local do projeto ou clique em 'Enviar Asset'.",
+                            font=ctk.CTkFont(family="Arial", size=11),
+                            text_color="gray50",
+                        ).pack(pady=40)
+                        return
 
-            card = FileCard(
-                self._assets_scroll,
-                name=asset.name,
-                mime_type=asset.mime_type or "application/octet-stream",
-                size=asset.formatted_size if not is_dir else None,
-                modified=asset.modified_time,
-                status_text=status_txt,
-                on_click=click_cmd,
-                on_sync=None if is_dir else (lambda a=asset: self._sync_asset_action(ws, a)),
-                on_rename=lambda a=asset: self._rename_item_prompt(ws, a.name),
-                on_delete=lambda a=asset: self._delete_item_confirm(ws, a.name),
-                is_uploading=is_uploading
-            )
-            card.pack(fill="x", padx=4, pady=3)
+                    for asset in assets:
+                        rel_key = os.path.join(target_subpath, asset.name).replace("\\", "/")
+                        is_uploading = rel_key in self._uploading_files
+
+                        status_txt = "SYNCHRONIZED"
+                        if is_uploading:
+                            status_txt = "Enviando..."
+                        elif asset.status.name == "REMOTE_ONLY":
+                            status_txt = "Nuvem"
+                        elif asset.status.name == "LOCAL_ONLY":
+                            status_txt = "Pendente de Envio"
+
+                        is_dir = asset.mime_type == "application/vnd.google-apps.folder"
+
+                        if is_dir:
+                            click_cmd = lambda a=asset: self._enter_folder(ws, a.name)
+                        else:
+                            click_cmd = lambda a=asset: self._manage_file_modal(ws, a)
+
+                        card = FileCard(
+                            self._assets_scroll,
+                            name=asset.name,
+                            mime_type=asset.mime_type or "application/octet-stream",
+                            size=asset.formatted_size if not is_dir else None,
+                            modified=asset.modified_time,
+                            status_text=status_txt,
+                            on_click=click_cmd,
+                            on_sync=None if is_dir else (lambda a=asset: self._sync_asset_action(ws, a)),
+                            on_rename=lambda a=asset: self._rename_item_prompt(ws, a.name),
+                            on_delete=lambda a=asset: self._delete_item_confirm(ws, a.name),
+                            is_uploading=is_uploading
+                        )
+                        card.pack(fill="x", padx=4, pady=3)
+
+                self.after(0, render_results)
+
+            except Exception as e:
+                def render_error():
+                    if not self.winfo_exists() or self._selected_workspace_id != target_ws_id or self._current_subpath != target_subpath:
+                        return
+                    loading_frame.destroy()
+                    ctk.CTkLabel(
+                        self._assets_scroll,
+                        text=f"❌ Erro ao sincronizar: {str(e)}",
+                        font=ctk.CTkFont(family="Arial", size=11),
+                        text_color="red",
+                    ).pack(pady=40)
+                self.after(0, render_error)
+
+        threading.Thread(target=fetch_assets, daemon=True).start()
+
 
 
 

@@ -275,6 +275,80 @@ class WorkspaceManagerUseCase:
 
         return discovered
 
+    def scan_and_import_local_workspaces(self, local_base_dir: str) -> List[Workspace]:
+        """
+        Percorre o diretório base local em busca de subpastas que já contenham a pasta oculta '.gameflow'
+        com um 'manifest.json' válido. Se encontrar, e o workspace não estiver cadastrado no banco SQLite local,
+        cadastra-o automaticamente no banco local.
+        """
+        imported = []
+        if not local_base_dir or not os.path.exists(local_base_dir):
+            return imported
+
+        conn = self._db.get_connection()
+        try:
+            # 1. Obter IDs dos workspaces já registrados ou ignorados para evitar duplicidade
+            existing_ids = set()
+            cursor = conn.execute("SELECT id FROM local_workspaces")
+            for row in cursor.fetchall():
+                existing_ids.add(row["id"])
+                
+            ignored_ids = set()
+            try:
+                cursor = conn.execute("SELECT workspace_id FROM ignored_workspaces")
+                for row in cursor.fetchall():
+                    ignored_ids.add(row["workspace_id"])
+            except sqlite3.OperationalError:
+                pass 
+
+            # 2. Percorrer subpastas do diretório base
+            for item in os.listdir(local_base_dir):
+                item_path = os.path.join(local_base_dir, item)
+                if not os.path.isdir(item_path):
+                    continue
+
+                manifest_path = os.path.join(item_path, ".gameflow", "manifest.json")
+                if os.path.exists(manifest_path):
+                    try:
+                        with open(manifest_path, "r", encoding="utf-8") as f:
+                            metadata = json.load(f)
+                        
+                        ws_id = metadata.get("id")
+                        ws_name = metadata.get("name", item)
+                        ws_desc = metadata.get("description", "")
+                        ws_engine = metadata.get("engine", "")
+                        ws_owner = metadata.get("owner", "")
+                        ws_drive_id = metadata.get("drive_folder_id")
+                        ws_created = metadata.get("created_at", datetime.now().strftime("%Y-%m-%d"))
+
+                        if ws_id and ws_id not in existing_ids and ws_id not in ignored_ids:
+                            conn.execute(
+                                """
+                                INSERT INTO local_workspaces (id, name, description, engine, owner, drive_folder_id, local_path, created_at)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                                """,
+                                (ws_id, ws_name, ws_desc, ws_engine, ws_owner, ws_drive_id, item_path, ws_created)
+                            )
+                            conn.commit()
+                            existing_ids.add(ws_id)
+                            
+                            imported.append(Workspace(
+                                id=ws_id,
+                                name=ws_name,
+                                description=ws_desc,
+                                engine=ws_engine,
+                                owner=ws_owner,
+                                drive_folder_id=ws_drive_id,
+                                local_path=item_path,
+                                created_at=ws_created,
+                                assets=[]
+                            ))
+                    except Exception as e:
+                        print(f"Erro ao ler/importar workspace em {item_path}: {e}")
+        finally:
+            conn.close()
+        return imported
+
     def list_workspaces(self) -> List[Workspace]:
         """Retorna todos os workspaces registrados no SQLite local."""
         workspaces = []
