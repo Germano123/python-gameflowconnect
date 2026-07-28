@@ -284,6 +284,76 @@ class TestWorkspaceManagement(unittest.TestCase):
         imported_again = self.manager.scan_and_import_local_workspaces(test_scan_dir)
         self.assertEqual(len(imported_again), 0)
 
+    def test_sync_workspaces_with_registry(self):
+        class MockDriveService:
+            def __init__(self):
+                self.is_authenticated = True
+                self.registry_data = {
+                    "version": "1.0.0",
+                    "workspaces": [
+                        {
+                            "id": "ws_remote_123",
+                            "name": "Remote Shared Project",
+                            "drive_folder_id": "folder_remote_123",
+                            "owner": "partner@gameflow.io",
+                            "created_at": "2026-01-01"
+                        }
+                    ]
+                }
+                self.existing_folders = {"folder_remote_123": True}
+                self.registry_written = None
+
+            def read_gameflow_registry(self):
+                return self.registry_data
+
+            def write_gameflow_registry(self, registry):
+                self.registry_written = registry
+
+            def check_folder_exists(self, folder_id):
+                return self.existing_folders.get(folder_id, False)
+
+            def find_file_in_folder(self, folder_id, filename):
+                return "manifest_id_123" if filename == "manifest.json" else None
+
+            def read_json_file(self, file_id):
+                return {
+                    "id": "ws_remote_123",
+                    "name": "Remote Shared Project",
+                    "description": "Shared RPG Desc",
+                    "engine": "Unity",
+                    "owner": "partner@gameflow.io",
+                    "members": ["partner@gameflow.io", "test_user@gameflow.io"],
+                    "created_at": "2026-01-01",
+                    "drive_folder_id": "folder_remote_123"
+                }
+
+            def remove_workspace_from_registry(self, ws_id):
+                self.registry_data["workspaces"] = [w for w in self.registry_data["workspaces"] if w["id"] != ws_id]
+
+        mock_drive = MockDriveService()
+
+        # 1. Executar sincronização para auto-importar o projeto compartilhado
+        # Como o usuário test_user@gameflow.io está no manifest e não localmente, deve ser importado
+        self.manager.sync_workspaces_with_registry(mock_drive, "test_user@gameflow.io")
+
+        # Verificar se foi inserido no banco local
+        ws_loaded = self.manager.get_workspace_by_id("ws_remote_123")
+        self.assertIsNotNone(ws_loaded)
+        self.assertEqual(ws_loaded.name, "Remote Shared Project")
+        self.assertEqual(ws_loaded.engine, "Unity")
+
+        # 2. Agora simular que a pasta do workspace foi excluída do Drive
+        # Removemos dos existentes e do registro remoto
+        mock_drive.registry_data["workspaces"] = []
+        mock_drive.existing_folders = {}
+
+        # Executa a sincronização novamente
+        self.manager.sync_workspaces_with_registry(mock_drive, "test_user@gameflow.io")
+
+        # Deve ter sido deletado localmente
+        self.assertIsNone(self.manager.get_workspace_by_id("ws_remote_123"))
+
+
 
 
 

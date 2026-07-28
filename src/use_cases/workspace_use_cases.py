@@ -42,6 +42,8 @@ class WorkspaceManagerUseCase:
                     "drive_folder_id": drive_folder_id
                 }
                 drive_service.write_json_file(drive_folder_id, "manifest.json", metadata)
+                # Registrar no arquivo central gameflow.json
+                drive_service.add_workspace_to_registry(ws_id, name, drive_folder_id)
             except Exception as e:
                 print(f"Erro ao criar pasta no Drive: {e}")
 
@@ -420,6 +422,13 @@ class WorkspaceManagerUseCase:
                             print(f"[Drive] Removido o usuário {user_email} da lista de membros remota do workspace {workspace_id}.")
                 except Exception as e:
                     print(f"Erro ao tentar remover participação do convidado no Drive: {e}")
+
+            # Remover do registro central gameflow.json
+            if drive_service and drive_service.is_authenticated:
+                try:
+                    drive_service.remove_workspace_from_registry(workspace_id)
+                except Exception as e:
+                    print(f"Erro ao remover workspace do registro gameflow.json: {e}")
 
             # Deletar assets e workspace
             conn.execute("DELETE FROM local_assets WHERE workspace_id = ?", (workspace_id,))
@@ -925,6 +934,127 @@ class WorkspaceManagerUseCase:
         except Exception as e:
             print(f"Erro no upload do asset inserido: {e}")
             return False
+
+    def sync_workspaces_with_registry(self, drive_service, user_email: str) -> None:
+        """
+        Sincroniza a lista de workspaces local SQLite com o registro remoto gameflow.json no Google Drive.
+        - Se uma pasta remota foi excluída/movida para a lixeira no Drive, apaga o workspace localmente.
+        - Se um projeto no gameflow.json remoto não existe localmente (e não está nos ignorados),
+          importa-o automaticamente.
+        """
+        if not drive_service or not drive_service.is_authenticated or not user_email:
+            return
+
+        try:
+            # 1. Obter registro central do Drive
+            registry = drive_service.read_gameflow_registry()
+            remote_workspaces = registry.get("workspaces", [])
+            remote_ids = {w.get("id") for w in remote_workspaces}
+
+            # 2. Obter workspaces locais
+            conn = self._db.get_connection()
+            try:
+                cursor = conn.execute("SELECT id, name, drive_folder_id FROM local_workspaces")
+                local_workspaces = cursor.fetchall()
+                
+                cursor = conn.execute("SELECT id FROM ignored_workspaces")
+                ignored_ids = {row["id"] for row in cursor.fetchall()}
+            finally:
+                conn.close()
+
+            local_ids = {w["id"] for w in local_workspaces}
+
+            # A. DETECÇÃO E LIMPEZA DE PASTAS REMOTAS EXCLUÍDAS DO DRIVE
+            for local_ws in local_workspaces:
+                ws_id = local_ws["id"]
+                folder_id = local_ws["drive_folder_id"]
+                
+                # Se não existe mais no gameflow.json remoto OU a pasta foi deletada/enviada para a lixeira no Drive
+                if ws_id not in remote_ids or not drive_service.check_folder_exists(folder_id):
+                    print(f"[Sync] Workspace '{local_ws['name']}' ({ws_id}) foi excluído ou está inacessível no Drive. Removendo localmente.")
+                    self.delete_workspace(ws_id, drive_service, user_email)  # Remove do banco e limpa pasta local física
+
+            # B. AUTO-IMPORTAÇÃO DE PROJETOS COMPARTILHADOS/NOVOS NO REGISTRO
+            for remote_ws in remote_workspaces:
+                ws_id = remote_ws.get("id")
+                folder_id = remote_ws.get("drive_folder_id")
+                name = remote_ws.get("name", "Workspace Compartilhado")
+                
+                if ws_id and ws_id not in local_ids and ws_id not in ignored_ids:
+                    # Verificar se a pasta do projeto ainda existe no Drive antes de importar
+                    if drive_service.check_folder_exists(folder_id):
+                        # Encontrar o manifesto remoto na pasta
+                        manifest_file_id = drive_service.find_file_in_folder(folder_id, "manifest.json")
+                        if manifest_file_id:
+                            try:
+                                metadata = drive_service.read_json_file(manifest_file_id)
+                                members = metadata.get("members", [])
+                                
+                                # Apenas importar se o usuário atual for membro participante
+                                if user_email in members:
+                                    print(f"[Sync] Novo workspace descoberto no registro: '{name}' ({ws_id}). Autocadastrando.")
+                                    desc = metadata.get("description", "")
+                                    engine = metadata.get("engine", "Godot")
+                                    owner = metadata.get("owner", "")
+                                    created_date = metadata.get("created_at", datetime.now().strftime("%Y-%m-%d"))
+
+                                    from state import AppState
+                                    local_path = os.path.abspath(os.path.join(AppState.local_base_dir, name))
+                                    os.makedirs(local_path, exist_ok=True)
+                                    
+                                    # Criar pasta .gameflow local e salvar manifesto
+                                    gameflow_dir = os.path.join(local_path, ".gameflow")
+                                    os.makedirs(gameflow_dir, exist_ok=True)
+                                    
+                                    with open(os.path.join(gameflow_dir, "manifest.json"), "w", encoding="utf-8") as f:
+                                        json.dump(metadata, f, indent=2, ensure_ascii=False)
+                                        
+                                    config_data = {
+                                        "workspace_id": ws_id,
+                                        "engine": engine,
+                                        "google_drive_folder_id": folder_id,
+                                        "preferencias": {"auto_sync": False, "intervalo_sync_minutos": 15}
+                                    }
+                                    with open(os.path.join(gameflow_dir, "config.json"), "w", encoding="utf-8") as f:
+                                        json.dump(config_data, f, indent=2, ensure_ascii=False)
+
+                                    # Registrar no banco local
+                                    conn = self._db.get_connection()
+                                    try:
+                                        conn.execute(
+                                            "INSERT INTO local_workspaces (id, name, description, engine, drive_folder_id, local_path, owner, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                                            (ws_id, name, desc, engine, folder_id, local_path, owner, created_date)
+                                        )
+                                        conn.commit()
+                                    finally:
+                                        conn.close()
+                            except Exception as ex:
+                                print(f"[Sync] Erro ao importar workspace remoto {ws_id}: {ex}")
+
+            # C. ATUALIZAR REGISTRO REMOTO COM WORKSPACES LOCAIS QUE NÃO ESTÃO LÁ
+            registry_updated = False
+            for local_ws in local_workspaces:
+                ws_id = local_ws["id"]
+                if ws_id not in remote_ids:
+                    ws_detail = self.get_workspace_by_id(ws_id)
+                    if ws_detail and ws_detail.owner == user_email:
+                        print(f"[Sync] Registrando workspace local '{ws_detail.name}' no gameflow.json remoto.")
+                        workspaces = registry.setdefault("workspaces", [])
+                        workspaces.append({
+                            "id": ws_id,
+                            "name": ws_detail.name,
+                            "drive_folder_id": ws_detail.drive_folder_id,
+                            "owner": user_email,
+                            "created_at": ws_detail.created_at
+                        })
+                        remote_ids.add(ws_id)
+                        registry_updated = True
+            
+            if registry_updated:
+                drive_service.write_gameflow_registry(registry)
+
+        except Exception as e:
+            print(f"Erro no motor de sincronização com o registro Drive: {e}")
 
 
 

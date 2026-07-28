@@ -297,6 +297,67 @@ class DriveService:
         files = results.get("files", [])
         return files[0].get("id") if files else None
 
+    def check_folder_exists(self, folder_id: str) -> bool:
+        self._require_auth()
+        try:
+            folder = self._service.files().get(fileId=folder_id, fields="id, trashed").execute(http=self._get_http())
+            return not folder.get("trashed", False)
+        except Exception:
+            return False
+
+    def read_gameflow_registry(self) -> dict:
+        self._require_auth()
+        try:
+            gameflow_root_id = self.get_or_create_root_folder("GameFlow")
+            file_id = self.find_file_in_folder(gameflow_root_id, "gameflow.json")
+            if file_id:
+                return self.read_json_file(file_id)
+        except Exception as e:
+            print(f"Erro ao ler registro gameflow.json: {e}")
+        return {"version": "1.0.0", "workspaces": []}
+
+    def write_gameflow_registry(self, registry: dict) -> None:
+        self._require_auth()
+        try:
+            gameflow_root_id = self.get_or_create_root_folder("GameFlow")
+            file_id = self.find_file_in_folder(gameflow_root_id, "gameflow.json")
+            registry["version"] = "1.0.0"
+            from datetime import datetime
+            registry["last_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            self.write_json_file(gameflow_root_id, "gameflow.json", registry, file_id=file_id)
+        except Exception as e:
+            print(f"Erro ao escrever no registro gameflow.json: {e}")
+
+    def add_workspace_to_registry(self, ws_id: str, name: str, folder_id: str) -> None:
+        self._require_auth()
+        try:
+            registry = self.read_gameflow_registry()
+            workspaces = registry.setdefault("workspaces", [])
+            if not any(w.get("id") == ws_id for w in workspaces):
+                from datetime import datetime
+                workspaces.append({
+                    "id": ws_id,
+                    "name": name,
+                    "drive_folder_id": folder_id,
+                    "owner": self.get_user_email(),
+                    "created_at": datetime.now().strftime("%Y-%m-%d")
+                })
+                self.write_gameflow_registry(registry)
+        except Exception as e:
+            print(f"Erro ao adicionar workspace ao registro: {e}")
+
+    def remove_workspace_from_registry(self, ws_id: str) -> None:
+        self._require_auth()
+        try:
+            registry = self.read_gameflow_registry()
+            workspaces = registry.get("workspaces", [])
+            filtered = [w for w in workspaces if w.get("id") != ws_id]
+            if len(filtered) != len(workspaces):
+                registry["workspaces"] = filtered
+                self.write_gameflow_registry(registry)
+        except Exception as e:
+            print(f"Erro ao remover workspace do registro: {e}")
+
     # ------------------------------------------------------------------ #
     # Internal helpers
     # ------------------------------------------------------------------ #

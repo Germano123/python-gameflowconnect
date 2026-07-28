@@ -212,11 +212,15 @@ class WorkspacesPage(DefaultLayout):
         if AppState.is_drive_connected():
             try:
                 manager = WorkspaceManagerUseCase()
-                discovered = manager.discover_shared_workspaces(AppState.user_email, AppState.drive_service)
-                if discovered:
-                    self.after(0, lambda: self._refresh_workspaces(scan=True))
+                # 1. Sincronizar com o registro central gameflow.json do Drive
+                manager.sync_workspaces_with_registry(AppState.drive_service, AppState.user_email)
+                # 2. Descobrir manifestos compartilhados com o usuário
+                manager.discover_shared_workspaces(AppState.user_email, AppState.drive_service)
+                
+                # Sempre atualizar a interface para refletir inclusões ou exclusões automáticas do Drive
+                self.after(0, lambda: self._refresh_workspaces(scan=True))
             except Exception as e:
-                print(f"Erro na descoberta de workspaces em background: {e}")
+                print(f"Erro na descoberta e sincronização de workspaces em background: {e}")
 
 
     def _refresh_workspaces(self, scan: bool = False) -> None:
