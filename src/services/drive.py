@@ -148,7 +148,7 @@ class DriveService:
         return self._creds is not None and self._creds.valid
 
     def _get_http(self):
-        from google.auth.transport.httplib2 import AuthorizedHttp
+        from google_auth_httplib2 import AuthorizedHttp
         import httplib2
         return AuthorizedHttp(self._creds, http=httplib2.Http())
 
