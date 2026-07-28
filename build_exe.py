@@ -110,10 +110,60 @@ def run_build():
         "src/main.py"
     ]
 
-    print("\nExecutando o PyInstaller para empacotamento...")
-    print(f"Comando: {' '.join(cmd)}")
-    
+    config_path = os.path.join("src", "services", "config.py")
+    config_generated = False
+
     try:
+        # Gerar arquivo de credenciais temporário
+        print("\nGerando arquivo temporario de credenciais...")
+        env = {}
+        if os.path.exists(".env"):
+            with open(".env", "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#"):
+                        continue
+                    if "=" in line:
+                        k, v = line.split("=", 1)
+                        env[k.strip()] = v.strip().strip('"').strip("'")
+                        
+        client_id = env.get("GOOGLE_CLIENT_ID")
+        client_secret = env.get("GOOGLE_CLIENT_SECRET")
+        project_id = env.get("GOOGLE_PROJECT_ID", "")
+        
+        if not client_id or not client_secret:
+            raise ValueError(
+                "Nao foi possivel compilar: GOOGLE_CLIENT_ID e GOOGLE_CLIENT_SECRET "
+                "precisam estar configurados no seu arquivo .env local!"
+            )
+            
+        import base64
+        b64_client_id = base64.b64encode(client_id.encode('utf-8'))
+        b64_client_secret = base64.b64encode(client_secret.encode('utf-8'))
+        b64_project_id = base64.b64encode(project_id.encode('utf-8'))
+        
+        config_content = f"""# Generated automatically during compilation. Do not edit or commit.
+import base64
+
+_ID = {b64_client_id}
+_SECRET = {b64_client_secret}
+_PROJECT = {b64_project_id}
+
+def get_credentials():
+    return {{
+        "client_id": base64.b64decode(_ID).decode('utf-8'),
+        "client_secret": base64.b64decode(_SECRET).decode('utf-8'),
+        "project_id": base64.b64decode(_PROJECT).decode('utf-8'),
+    }}
+"""
+        with open(config_path, "w", encoding="utf-8") as f:
+            f.write(config_content)
+        print(f"[OK] Arquivo temporario de credenciais gerado: {config_path}")
+        config_generated = True
+
+        print("\nExecutando o PyInstaller para empacotamento...")
+        print(f"Comando: {' '.join(cmd)}")
+        
         subprocess.check_call(cmd)
         print("\n============================================================\n")
         print("  [OK] PROCESSO DE COMPILACAO PYINSTALLER CONCLUIDO!")
@@ -122,15 +172,6 @@ def run_build():
         print(f"-> {os.path.abspath('dist/GameFlowConnect')}\n")
         print("Voce pode testar executando o arquivo:")
         print(f"-> {os.path.abspath('dist/GameFlowConnect/GameFlowConnect.exe')}\n")
-
-        # Copiar arquivo de configuracao .env (ou .env.example como fallback) para a pasta compilada
-        env_dest = os.path.join("dist", "GameFlowConnect", ".env")
-        if os.path.exists(".env"):
-            shutil.copy(".env", env_dest)
-            print("[OK] Arquivo de configuracao '.env' copiado para a distribuicao portatil.")
-        elif os.path.exists(".env.example"):
-            shutil.copy(".env.example", env_dest)
-            print("[OK] '.env.example' copiado como '.env' para a distribuicao portatil (Preencha as chaves!).")
 
         # Gerar o arquivo .iss de configuracao do Inno Setup automaticamente
         generate_iss_file()
@@ -151,9 +192,18 @@ def run_build():
         print(f"1. A versão portátil está pronta em: {os.path.abspath('dist/GameFlowConnect_v' + VERSION + '_Portable.zip')}")
         print("2. Para gerar o instalador clássico, abra o arquivo 'GameFlowConnect.iss' gerado no Inno Setup Compiler e pressione F9.")
 
-    except subprocess.CalledProcessError as e:
+    except Exception as e:
         print(f"\n[ERRO] Falha durante o processo de compilação: {str(e)}")
         sys.exit(1)
+    finally:
+        # Apagar o config.py gerado para nao deixar chaves no disco do dev
+        if config_generated and os.path.exists(config_path):
+            try:
+                os.remove(config_path)
+                print("[OK] Arquivo de credenciais temporario 'config.py' removido com sucesso.")
+            except Exception as e:
+                print(f"[Aviso] Falha ao remover config.py temporario: {e}")
+
 
 
 if __name__ == "__main__":

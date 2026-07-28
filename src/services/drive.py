@@ -85,15 +85,54 @@ class DriveService:
                     creds = None
 
             if not creds:
-                if not os.path.exists(CREDENTIALS_PATH):
-                    raise FileNotFoundError(
-                        f"Arquivo de credenciais OAuth não encontrado: '{CREDENTIALS_PATH}'. "
-                        "Copie o arquivo credentials.json baixado do Google Cloud Console para a raiz do projeto."
+                # 1. Tentar carregar credenciais do .env local (desenvolvimento)
+                self._load_env_file()
+                
+                client_id = os.environ.get("GOOGLE_CLIENT_ID")
+                project_id = os.environ.get("GOOGLE_PROJECT_ID")
+                client_secret = os.environ.get("GOOGLE_CLIENT_SECRET")
+                auth_uri = os.environ.get("GOOGLE_AUTH_URI", "https://accounts.google.com/o/oauth2/auth")
+                token_uri = os.environ.get("GOOGLE_TOKEN_URI", "https://oauth2.googleapis.com/token")
+                auth_provider_cert_url = os.environ.get("GOOGLE_AUTH_PROVIDER_CERT_URL", "https://www.googleapis.com/oauth2/v1/certs")
+                redirect_uris = os.environ.get("GOOGLE_REDIRECT_URIS", "http://localhost").split(",")
+
+                # 2. Se nao estiverem no ambiente, carregar as credenciais embutidas compiladas (producao)
+                if not client_id or not client_secret:
+                    try:
+                        from services.config import get_credentials
+                        baked = get_credentials()
+                        client_id = baked.get("client_id")
+                        project_id = baked.get("project_id")
+                        client_secret = baked.get("client_secret")
+                        auth_uri = baked.get("auth_uri", auth_uri)
+                        token_uri = baked.get("token_uri", token_uri)
+                        auth_provider_cert_url = baked.get("auth_provider_cert_url", auth_provider_cert_url)
+                        redirect_uris = baked.get("redirect_uris", redirect_uris)
+                    except ImportError:
+                        pass
+
+                # 3. Se ainda assim nao houver credenciais, falhar
+                if not client_id or not client_secret:
+                    raise ValueError(
+                        "Credenciais do Google Drive nao encontradas! "
+                        "Em desenvolvimento, configure GOOGLE_CLIENT_ID e GOOGLE_CLIENT_SECRET no arquivo .env. "
+                        "Em producao, certifique-se de compilar utilizando o script build_exe.py."
                     )
-                flow = InstalledAppFlow.from_client_secrets_file(
-                    CREDENTIALS_PATH, SCOPES
-                )
+
+                client_config = {
+                    "installed": {
+                        "client_id": client_id,
+                        "project_id": project_id,
+                        "auth_uri": auth_uri,
+                        "token_uri": token_uri,
+                        "auth_provider_x509_cert_url": auth_provider_cert_url,
+                        "client_secret": client_secret,
+                        "redirect_uris": redirect_uris
+                    }
+                }
+                flow = InstalledAppFlow.from_client_config(client_config, SCOPES)
                 creds = flow.run_local_server(port=0)
+
 
             os.makedirs(os.path.dirname(TOKEN_PATH), exist_ok=True)
             with open(TOKEN_PATH, "w") as token:
