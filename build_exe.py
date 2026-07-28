@@ -123,6 +123,15 @@ def run_build():
         print("Voce pode testar executando o arquivo:")
         print(f"-> {os.path.abspath('dist/GameFlowConnect/GameFlowConnect.exe')}\n")
 
+        # Copiar arquivo de configuracao .env (ou .env.example como fallback) para a pasta compilada
+        env_dest = os.path.join("dist", "GameFlowConnect", ".env")
+        if os.path.exists(".env"):
+            shutil.copy(".env", env_dest)
+            print("[OK] Arquivo de configuracao '.env' copiado para a distribuicao portatil.")
+        elif os.path.exists(".env.example"):
+            shutil.copy(".env.example", env_dest)
+            print("[OK] '.env.example' copiado como '.env' para a distribuicao portatil (Preencha as chaves!).")
+
         # Gerar o arquivo .iss de configuracao do Inno Setup automaticamente
         generate_iss_file()
 
