@@ -242,11 +242,29 @@ class ProfilePage(DefaultLayout):
                 onClick=lambda inv=invite: self._accept_invite(inv),
             ).pack(side="left", padx=(0, 8))
 
+            ButtonComponent(
+                parent=btn_row,
+                label="✗ Recusar",
+                size="small",
+                variant="danger",
+                onClick=lambda inv=invite: self._decline_invite(inv),
+            ).pack(side="left")
+
     def _accept_invite(self, invite: dict) -> None:
-        # Pedir diretório local de sincronização da engine
+        # Pedir diretório local de sincronização da engine primeiro
         local_dir = filedialog.askdirectory(title=f"Selecionar pasta local para sincronizar {invite['name']}")
         if not local_dir:
             return
+
+        # Limpar convites e exibir loading para evitar cliques duplos
+        for w in self._invites_scroll.winfo_children():
+            w.destroy()
+        ctk.CTkLabel(
+            self._invites_scroll,
+            text="⏳ Configurando workspace e baixando arquivos...",
+            font=ctk.CTkFont(family="Arial", size=11),
+            text_color="gray50"
+        ).pack(pady=40)
 
         # Criar a pasta oculta .gameflow e connection/manifest localmente
         import os
@@ -294,7 +312,6 @@ class ProfilePage(DefaultLayout):
                 conn.execute("DELETE FROM ignored_workspaces WHERE id = ?", (invite["id"],))
                 conn.commit()
 
-
             ModalDialog(
                 self._parent,
                 title="Workspace Adicionado!",
@@ -303,6 +320,7 @@ class ProfilePage(DefaultLayout):
             )
             self._refresh_invitations()
         except sqlite3.IntegrityError:
+            self._refresh_invitations()
             ModalDialog(
                 self._parent,
                 title="Aviso",
@@ -310,12 +328,68 @@ class ProfilePage(DefaultLayout):
                 cancel_label="Fechar"
             )
         except Exception as e:
+            self._refresh_invitations()
             ModalDialog(
                 self._parent,
                 title="Erro",
                 message=f"Erro ao salvar workspace localmente: {e}",
                 cancel_label="Fechar"
             )
+
+    def _decline_invite(self, invite: dict) -> None:
+        from state import AppState
+        
+        # Limpar convites e exibir loading para evitar cliques duplos
+        for w in self._invites_scroll.winfo_children():
+            w.destroy()
+        ctk.CTkLabel(
+            self._invites_scroll,
+            text="⏳ Recusando convite no Google Drive...",
+            font=ctk.CTkFont(family="Arial", size=11),
+            text_color="gray50"
+        ).pack(pady=40)
+
+        def run_decline():
+            try:
+                drive_service = AppState.drive_service
+                if drive_service and drive_service.is_authenticated:
+                    # Encontrar o arquivo manifest.json remoto na pasta do convite
+                    manifest_file_id = drive_service.find_file_in_folder(invite["drive_folder_id"], "manifest.json")
+                    if manifest_file_id:
+                        metadata = drive_service.read_json_file(manifest_file_id)
+                        members = metadata.get("members", [])
+                        if AppState.user_email in members:
+                            members.remove(AppState.user_email)
+                            metadata["members"] = members
+                            # Atualizar manifest.json no Drive sem o membro recusado
+                            drive_service.write_json_file(invite["drive_folder_id"], "manifest.json", metadata, file_id=manifest_file_id)
+
+                # Registrar nos ignorados localmente para garantir
+                from adapters.database import LocalDatabase
+                db = LocalDatabase()
+                with db.get_connection() as conn:
+                    conn.execute("INSERT OR REPLACE INTO ignored_workspaces (id) VALUES (?)", (invite["id"],))
+                    conn.commit()
+
+                self.after(0, self._refresh_invitations)
+                self.after(0, lambda: ModalDialog(
+                    self._parent,
+                    title="Convite Recusado",
+                    message=f"Você recusou a participação no workspace '{invite['name']}'.",
+                    cancel_label="Fechar"
+                ))
+            except Exception as e:
+                self.after(0, self._refresh_invitations)
+                self.after(0, lambda err=str(e): ModalDialog(
+                    self._parent,
+                    title="Erro",
+                    message=f"Falha ao recusar o convite: {err}",
+                    cancel_label="Fechar"
+                ))
+
+        import threading
+        threading.Thread(target=run_decline, daemon=True).start()
+
 
     def _on_logout(self) -> None:
         from state import AppState

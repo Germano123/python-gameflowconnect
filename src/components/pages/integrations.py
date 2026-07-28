@@ -172,10 +172,8 @@ class IntegrationsPage(DefaultLayout):
                 svc = DriveService()
                 svc.authenticate()
                 AppState.drive_service = svc
-                # Buscar e-mail do Drive
                 try:
-                    about = svc._service.about().get(fields="user(emailAddress)").execute()
-                    AppState.user_email = about.get("user", {}).get("emailAddress", "")
+                    AppState.user_email = svc.get_user_email()
                 except Exception:
                     pass
                 self.after(0, self._update_status)

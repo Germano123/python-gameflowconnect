@@ -147,6 +147,11 @@ class DriveService:
     def is_authenticated(self) -> bool:
         return self._creds is not None and self._creds.valid
 
+    def _get_http(self):
+        from google.auth.transport.httplib2 import AuthorizedHttp
+        import httplib2
+        return AuthorizedHttp(self._creds, http=httplib2.Http())
+
     # ------------------------------------------------------------------ #
     # File Operations
     # ------------------------------------------------------------------ #
@@ -160,7 +165,7 @@ class DriveService:
                     pageSize=page_size,
                     fields="nextPageToken, files(id, name, mimeType, size, modifiedTime)",
                 )
-                .execute()
+                .execute(http=self._get_http())
             )
             return results.get("files", [])
         except HttpError as error:
@@ -185,7 +190,7 @@ class DriveService:
             file = (
                 self._service.files()
                 .create(body=file_metadata, media_body=media, fields="id")
-                .execute()
+                .execute(http=self._get_http())
             )
             return file.get("id")
         except HttpError as error:
@@ -200,7 +205,7 @@ class DriveService:
         try:
             request = self._service.files().get_media(fileId=file_id)
             with open(destination_path, "wb") as f:
-                f.write(request.execute())
+                f.write(request.execute(http=self._get_http()))
             return destination_path
         except HttpError as error:
             raise HttpError(
@@ -222,7 +227,7 @@ class DriveService:
         if parent_folder_id:
             file_metadata["parents"] = [parent_folder_id]
 
-        file = self._service.files().create(body=file_metadata, fields="id").execute()
+        file = self._service.files().create(body=file_metadata, fields="id").execute(http=self._get_http())
         return file.get("id")
 
     def share_folder(self, folder_id: str, email: str, role: str = "writer") -> dict:
@@ -236,7 +241,7 @@ class DriveService:
             fileId=folder_id,
             body=user_permission,
             fields="id"
-        ).execute()
+        ).execute(http=self._get_http())
 
     def search_shared_projects(self) -> list[dict]:
         """
@@ -244,7 +249,7 @@ class DriveService:
         """
         self._require_auth()
         query = "name = 'manifest.json' and trashed = false"
-        results = self._service.files().list(q=query, fields="files(id, name, parents)").execute()
+        results = self._service.files().list(q=query, fields="files(id, name, parents)").execute(http=self._get_http())
         return results.get("files", [])
 
 
@@ -252,7 +257,7 @@ class DriveService:
     def read_json_file(self, file_id: str) -> dict:
         self._require_auth()
         request = self._service.files().get_media(fileId=file_id)
-        content_bytes = request.execute()
+        content_bytes = request.execute(http=self._get_http())
         return json.loads(content_bytes.decode("utf-8"))
 
     def write_json_file(self, folder_id: str, filename: str, content: dict, file_id: Optional[str] = None) -> str:
@@ -266,7 +271,7 @@ class DriveService:
                 fileId=file_id,
                 media_body=media,
                 fields="id"
-            ).execute()
+            ).execute(http=self._get_http())
             return file_id
         else:
             file_metadata = {
@@ -277,13 +282,13 @@ class DriveService:
                 body=file_metadata,
                 media_body=media,
                 fields="id"
-            ).execute()
+            ).execute(http=self._get_http())
             return file.get("id")
 
     def find_file_in_folder(self, folder_id: str, filename: str) -> Optional[str]:
         self._require_auth()
         query = f"'{folder_id}' in parents and name = '{filename}' and trashed = false"
-        results = self._service.files().list(q=query, fields="files(id, name)").execute()
+        results = self._service.files().list(q=query, fields="files(id, name)").execute(http=self._get_http())
         files = results.get("files", [])
         return files[0].get("id") if files else None
 
@@ -303,7 +308,7 @@ class DriveService:
         """
         self._require_auth()
         try:
-            about = self._service.about().get(fields="user(emailAddress)").execute()
+            about = self._service.about().get(fields="user(emailAddress)").execute(http=self._get_http())
             return about.get("user", {}).get("emailAddress", "")
         except Exception as e:
             print(f"Erro ao obter e-mail do Google Drive: {e}")

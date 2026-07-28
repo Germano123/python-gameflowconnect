@@ -168,9 +168,7 @@ class WorkspaceManagerUseCase:
             return discovered
 
         try:
-            query = "name = 'manifest.json' and trashed = false"
-            results = drive_service._service.files().list(q=query, fields="files(id, name, parents)").execute()
-            shared_files = results.get("files", [])
+            shared_files = drive_service.search_shared_projects()
 
 
             for file_info in shared_files:
@@ -394,14 +392,33 @@ class WorkspaceManagerUseCase:
             conn.close()
         return None
 
-    def delete_workspace(self, workspace_id: str) -> bool:
+    def delete_workspace(self, workspace_id: str, drive_service=None, user_email: str = None) -> bool:
         """Exclui o workspace localmente no SQLite, deleta a pasta física e marca como ignorado."""
         conn = self._db.get_connection()
         try:
-            # Obter local_path antes de deletar
-            cursor = conn.execute("SELECT local_path FROM local_workspaces WHERE id = ?", (workspace_id,))
+            # Obter local_path, drive_folder_id e owner antes de deletar
+            cursor = conn.execute("SELECT local_path, drive_folder_id, owner FROM local_workspaces WHERE id = ?", (workspace_id,))
             row = cursor.fetchone()
             local_path = row["local_path"] if row else None
+            drive_folder_id = row["drive_folder_id"] if row else None
+            owner = row["owner"] if row else None
+
+            # Se o usuário for convidado, tentar removê-lo da participação no Drive
+            if drive_service and drive_service.is_authenticated and user_email and owner and owner != user_email:
+                try:
+                    # Encontrar o arquivo manifest.json remoto
+                    manifest_file_id = drive_service.find_file_in_folder(drive_folder_id, "manifest.json")
+                    if manifest_file_id:
+                        metadata = drive_service.read_json_file(manifest_file_id)
+                        members = metadata.get("members", [])
+                        if user_email in members:
+                            members.remove(user_email)
+                            metadata["members"] = members
+                            # Gravar manifest.json atualizado no Drive
+                            drive_service.write_json_file(drive_folder_id, "manifest.json", metadata, file_id=manifest_file_id)
+                            print(f"[Drive] Removido o usuário {user_email} da lista de membros remota do workspace {workspace_id}.")
+                except Exception as e:
+                    print(f"Erro ao tentar remover participação do convidado no Drive: {e}")
 
             # Deletar assets e workspace
             conn.execute("DELETE FROM local_assets WHERE workspace_id = ?", (workspace_id,))
@@ -542,7 +559,7 @@ class WorkspaceManagerUseCase:
         current_id = parent_folder_id
         for part in parts:
             query = f"'{current_id}' in parents and name = '{part}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
-            results = drive_service._service.files().list(q=query, fields="files(id)").execute()
+            results = drive_service._service.files().list(q=query, fields="files(id)").execute(http=drive_service._get_http())
             files = results.get("files", [])
             if files:
                 current_id = files[0].get("id")
@@ -587,7 +604,7 @@ class WorkspaceManagerUseCase:
         if drive_service and drive_service.is_authenticated and remote_parent_id:
             try:
                 query = f"'{remote_parent_id}' in parents and trashed = false"
-                results = drive_service._service.files().list(q=query, fields="files(id, name, mimeType, size, modifiedTime)").execute()
+                results = drive_service._service.files().list(q=query, fields="files(id, name, mimeType, size, modifiedTime)").execute(http=drive_service._get_http())
                 files = results.get("files", [])
                 for f in files:
                     name = f.get("name")
@@ -652,14 +669,14 @@ class WorkspaceManagerUseCase:
                 if parent_id:
                     # Verificar se já existe remoto
                     query = f"'{parent_id}' in parents and name = '{folder_name}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
-                    results = drive_service._service.files().list(q=query, fields="files(id)").execute()
+                    results = drive_service._service.files().list(q=query, fields="files(id)").execute(http=drive_service._get_http())
                     if not results.get("files"):
                         body = {
                             "name": folder_name,
                             "mimeType": "application/vnd.google-apps.folder",
                             "parents": [parent_id]
                         }
-                        drive_service._service.files().create(body=body).execute()
+                        drive_service._service.files().create(body=body).execute(http=drive_service._get_http())
             except Exception as e:
                 print(f"Erro ao criar pasta remota no Drive: {e}")
         return True
@@ -686,11 +703,11 @@ class WorkspaceManagerUseCase:
                 parent_id = self.get_remote_subfolder_id(ws.drive_folder_id, subpath, drive_service)
                 if parent_id:
                     query = f"'{parent_id}' in parents and name = '{old_name}' and trashed = false"
-                    results = drive_service._service.files().list(q=query, fields="files(id)").execute()
+                    results = drive_service._service.files().list(q=query, fields="files(id)").execute(http=drive_service._get_http())
                     files = results.get("files", [])
                     if files:
                         fid = files[0].get("id")
-                        drive_service._service.files().update(fileId=fid, body={"name": new_name}).execute()
+                        drive_service._service.files().update(fileId=fid, body={"name": new_name}).execute(http=drive_service._get_http())
             except Exception as e:
                 print(f"Erro ao renomear item no Drive: {e}")
         return True
@@ -727,11 +744,11 @@ class WorkspaceManagerUseCase:
                 parent_id = self.get_remote_subfolder_id(ws.drive_folder_id, subpath, drive_service)
                 if parent_id:
                     query = f"'{parent_id}' in parents and name = '{name}' and trashed = false"
-                    results = drive_service._service.files().list(q=query, fields="files(id)").execute()
+                    results = drive_service._service.files().list(q=query, fields="files(id)").execute(http=drive_service._get_http())
                     files = results.get("files", [])
                     if files:
                         fid = files[0].get("id")
-                        drive_service._service.files().update(fileId=fid, body={"trashed": True}).execute()
+                        drive_service._service.files().update(fileId=fid, body={"trashed": True}).execute(http=drive_service._get_http())
             except Exception as e:
                 print(f"Erro ao mandar item para a lixeira no Drive: {e}")
         return True
@@ -771,17 +788,17 @@ class WorkspaceManagerUseCase:
 
                 if src_parent_id and dest_parent_id:
                     query = f"'{src_parent_id}' in parents and name = '{name}' and trashed = false"
-                    results = drive_service._service.files().list(q=query, fields="files(id)").execute()
+                    results = drive_service._service.files().list(q=query, fields="files(id)").execute(http=drive_service._get_http())
                     files = results.get("files", [])
                     if files:
                         fid = files[0].get("id")
                         # Mover mudando a referência de parents no Drive
-                        self._service.files().update(
+                        drive_service._service.files().update(
                             fileId=fid,
                             addParents=dest_parent_id,
                             removeParents=src_parent_id,
                             fields="id, parents"
-                        ).execute()
+                        ).execute(http=drive_service._get_http())
             except Exception as e:
                 print(f"Erro ao mover no Drive: {e}")
         return True
@@ -802,7 +819,7 @@ class WorkspaceManagerUseCase:
                 dest_path = os.path.join(ws.local_path, subpath, asset.name)
                 request = drive_service._service.files().get_media(fileId=asset.id)
                 with open(dest_path, "wb") as f:
-                    f.write(request.execute())
+                    f.write(request.execute(http=drive_service._get_http()))
                 
                 # Salvar no SQLite local
                 conn = self._db.get_connection()
@@ -833,7 +850,7 @@ class WorkspaceManagerUseCase:
                         "mimeType": "application/vnd.google-apps.folder",
                         "parents": [parent_id]
                     }
-                    drive_service._service.files().create(body=body).execute()
+                    drive_service._service.files().create(body=body).execute(http=drive_service._get_http())
                     return True
                 else:
                     # Enviar arquivo
@@ -843,7 +860,7 @@ class WorkspaceManagerUseCase:
                         'parents': [parent_id]
                     }
                     media = MediaFileUpload(asset.local_path, mimetype=asset.mime_type or 'application/octet-stream', resumable=True)
-                    file = drive_service._service.files().create(body=file_metadata, media_body=media, fields='id').execute()
+                    file = drive_service._service.files().create(body=file_metadata, media_body=media, fields='id').execute(http=drive_service._get_http())
                     uploaded_id = file.get('id')
 
                     asset.id = uploaded_id
@@ -881,7 +898,7 @@ class WorkspaceManagerUseCase:
                 mime_type = "application/octet-stream"
 
             media = MediaFileUpload(local_path, mimetype=mime_type, resumable=True)
-            file = drive_service._service.files().create(body=file_metadata, media_body=media, fields='id, size, mimeType').execute()
+            file = drive_service._service.files().create(body=file_metadata, media_body=media, fields='id, size, mimeType').execute(http=drive_service._get_http())
             uploaded_id = file.get('id')
 
             # Anexar no SQLite local cache

@@ -861,10 +861,16 @@ class WorkspacesPage(DefaultLayout):
         
         def do_delete():
             from use_cases import WorkspaceManagerUseCase
-            manager = WorkspaceManagerUseCase()
-            manager.delete_workspace(self._selected_workspace_id)
-            self._selected_workspace_id = None
-            self._refresh_workspaces()
+            from state import AppState
+            import threading
+
+            def run():
+                manager = WorkspaceManagerUseCase()
+                manager.delete_workspace(self._selected_workspace_id, AppState.drive_service, AppState.user_email)
+                self._selected_workspace_id = None
+                self.after(0, self._refresh_workspaces)
+
+            threading.Thread(target=run, daemon=True).start()
 
         ModalDialog(
             self._parent,
