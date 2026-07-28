@@ -214,9 +214,14 @@ class DriveService:
                 uri=f"download_file({file_id}) — {error.uri}",
             )
 
-    # ------------------------------------------------------------------ #
-    # Shared Project & Folder Management (Decentralized Sync)
-    # ------------------------------------------------------------------ #
+    def get_or_create_root_folder(self, folder_name: str = "GameFlow") -> str:
+        self._require_auth()
+        query = f"'root' in parents and name = '{folder_name}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
+        results = self._service.files().list(q=query, fields="files(id)").execute(http=self._get_http())
+        files = results.get("files", [])
+        if files:
+            return files[0].get("id")
+        return self.create_folder(folder_name, parent_folder_id="root")
 
     def create_folder(self, folder_name: str, parent_folder_id: Optional[str] = None) -> str:
         self._require_auth()

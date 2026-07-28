@@ -28,7 +28,8 @@ class WorkspaceManagerUseCase:
         drive_folder_id = "demo_folder"
         if drive_service and drive_service.is_authenticated:
             try:
-                drive_folder_id = drive_service.create_folder(f"GameFlow - {name}")
+                gameflow_root_id = drive_service.get_or_create_root_folder("GameFlow")
+                drive_folder_id = drive_service.create_folder(name, parent_folder_id=gameflow_root_id)
                 # Salvar manifesto inicial no Drive (project_metadata.json foi substituído por manifest.json)
                 metadata = {
                     "id": ws_id,
