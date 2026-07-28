@@ -39,9 +39,27 @@ class DriveService:
         self._creds: Optional[Credentials] = None
         self._service = None
 
-    # ------------------------------------------------------------------ #
-    # Authentication
-    # ------------------------------------------------------------------ #
+    def _load_env_file(self) -> None:
+        import sys
+        if getattr(sys, "frozen", False):
+            base_dir = os.path.dirname(sys.executable)
+        else:
+            base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+            
+        env_path = os.path.join(base_dir, ".env")
+        if os.path.exists(env_path):
+            try:
+                with open(env_path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line or line.startswith("#"):
+                            continue
+                        if "=" in line:
+                            key, val = line.split("=", 1)
+                            val = val.strip().strip('"').strip("'")
+                            os.environ[key.strip()] = val
+            except Exception as e:
+                print(f"Erro ao carregar arquivo .env: {e}")
 
     def authenticate(self) -> bool:
         """
