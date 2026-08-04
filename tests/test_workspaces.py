@@ -617,6 +617,44 @@ class TestWorkspaceManagement(unittest.TestCase):
         self.assertEqual(assets[0].name, "perdido.png")
         self.assertEqual(assets[0].status, SyncStatus.OUT_OF_SYNC)
 
+    def test_list_importable_shared_workspaces(self):
+        # 1. Mock do Drive que simula a existência de um projeto compartilhado não importado localmente
+        class MockDriveRegistry:
+            def __init__(self):
+                self.is_authenticated = True
+                
+            def read_gameflow_registry(self):
+                return {
+                    "workspaces": [
+                        {
+                            "id": "shared_ws_789",
+                            "name": "Shared Drive Project",
+                            "drive_folder_id": "drive_folder_789"
+                        }
+                    ]
+                }
+                
+            def find_file_in_folder(self, parent_id, name):
+                return "manifest_file_id"
+                
+            def read_json_file(self, file_id):
+                return {
+                    "id": "shared_ws_789",
+                    "name": "Shared Drive Project",
+                    "description": "Projeto compartilhado com você",
+                    "engine": "Unity",
+                    "members": ["user@test.io"]
+                }
+
+        mock_drive = MockDriveRegistry()
+        
+        # 2. Obter a lista de importáveis e verificar que o projeto Shared Drive Project é listado
+        importables = self.manager.list_importable_shared_workspaces("user@test.io", mock_drive)
+        self.assertEqual(len(importables), 1)
+        self.assertEqual(importables[0]["id"], "shared_ws_789")
+        self.assertEqual(importables[0]["name"], "Shared Drive Project")
+
+
 
 
 

@@ -148,12 +148,30 @@ class WorkspacesPage(DefaultLayout):
         self._left_panel.grid_rowconfigure(1, weight=1)
         self._left_panel.grid_columnconfigure(0, weight=1)
 
+        # Title & Search/Other projects icon
+        self._workspaces_title_frame = ctk.CTkFrame(self._left_panel, fg_color="transparent")
+        self._workspaces_title_frame.grid(row=0, column=0, padx=14, pady=12, sticky="ew")
+        self._workspaces_title_frame.columnconfigure(0, weight=1)
+
         ctk.CTkLabel(
-            self._left_panel,
+            self._workspaces_title_frame,
             text="Meus Workspaces",
             font=ctk.CTkFont(family="Arial", size=13, weight="bold"),
             text_color="#ffffff",
-        ).grid(row=0, column=0, padx=14, pady=12, sticky="w")
+        ).pack(side="left")
+
+        # Botão discreto para buscar outros projetos
+        self._other_projects_btn = ctk.CTkButton(
+            self._workspaces_title_frame,
+            text="🔍 Outros",
+            font=ctk.CTkFont(family="Arial", size=10, weight="bold"),
+            fg_color="#1a3743",
+            hover_color="#2d5266",
+            width=64,
+            height=24,
+            command=self._open_import_shared_modal
+        )
+        self._other_projects_btn.pack(side="right")
 
         self._workspaces_scroll = ctk.CTkScrollableFrame(self._left_panel, fg_color="transparent")
         self._workspaces_scroll.grid(row=1, column=0, sticky="nsew", padx=6, pady=6)
@@ -1237,6 +1255,96 @@ class WorkspacesPage(DefaultLayout):
             on_confirm=do_delete,
             confirm_label="Remover"
         )
+
+    def _open_import_shared_modal(self) -> None:
+        from state import AppState
+        from use_cases import WorkspaceManagerUseCase
+        
+        if not AppState.is_drive_connected():
+            ModalDialog(self._parent, title="Drive Desconectado", message="Por favor, conecte sua conta do Google Drive primeiro.", on_confirm=lambda: None)
+            return
+
+        modal = ctk.CTkToplevel(self._parent)
+        modal.title("Outros Projetos no Drive")
+        modal.geometry("500x420")
+        modal.grab_set()
+
+        ctk.CTkLabel(modal, text="📂 Outros Projetos Compartilhados", font=ctk.CTkFont(size=14, weight="bold")).pack(pady=(16, 4))
+        ctk.CTkLabel(modal, text="Selecione um projeto para importar e sincronizar localmente", font=ctk.CTkFont(size=11), text_color="gray50").pack(pady=(0, 10))
+
+        scroll = ctk.CTkScrollableFrame(modal, fg_color="transparent")
+        scroll.pack(fill="both", expand=True, padx=20, pady=10)
+
+        loading_lbl = ctk.CTkLabel(scroll, text="⏳ Buscando projetos compartilhados no Drive...", text_color="gray60")
+        loading_lbl.pack(pady=40)
+
+        def fetch_and_render():
+            try:
+                manager = WorkspaceManagerUseCase()
+                projects = manager.list_importable_shared_workspaces(AppState.user_email, AppState.drive_service)
+                
+                def render():
+                    if not modal.winfo_exists():
+                        return
+                    loading_lbl.destroy()
+
+                    if not projects:
+                        ctk.CTkLabel(scroll, text="Nenhum outro projeto compartilhado encontrado.", text_color="gray50").pack(pady=40)
+                        return
+
+                    for p in projects:
+                        p_frame = ctk.CTkFrame(scroll, fg_color="#1a3743", corner_radius=6, border_width=1, border_color="#2d4a5a")
+                        p_frame.pack(fill="x", pady=4, padx=2)
+                        p_frame.columnconfigure(0, weight=1)
+
+                        lbl_name = ctk.CTkLabel(p_frame, text=p["name"], font=ctk.CTkFont(weight="bold", size=12), text_color="#ffffff")
+                        lbl_name.grid(row=0, column=0, padx=10, pady=(6, 2), sticky="w")
+
+                        lbl_desc = ctk.CTkLabel(p_frame, text=p["description"] or "Sem descrição", font=ctk.CTkFont(size=10), text_color="gray60")
+                        lbl_desc.grid(row=1, column=0, padx=10, pady=(0, 6), sticky="w")
+
+                        # Botão Importar
+                        btn = ctk.CTkButton(
+                            p_frame,
+                            text="📥 Importar",
+                            font=ctk.CTkFont(size=11, weight="bold"),
+                            fg_color="#00aa00",
+                            hover_color="#008800",
+                            width=80,
+                            height=26,
+                            command=lambda proj=p: [modal.destroy(), self._import_shared_project(proj)]
+                        )
+                        btn.grid(row=0, column=1, rowspan=2, padx=10, pady=6, sticky="e")
+
+                self.after(0, render)
+            except Exception as e:
+                def render_error():
+                    if modal.winfo_exists():
+                        loading_lbl.configure(text=f"❌ Erro ao buscar: {str(e)}", text_color="red")
+                self.after(0, render_error)
+
+        import threading
+        threading.Thread(target=fetch_and_render, daemon=True).start()
+
+    def _import_shared_project(self, project) -> None:
+        from use_cases import WorkspaceManagerUseCase
+        from state import AppState
+        manager = WorkspaceManagerUseCase()
+        
+        # 1. Remover da lista de ignorados
+        manager.unignore_workspace(project["id"])
+        
+        # 2. Executar descoberta e importação do Drive
+        def run_import():
+            try:
+                manager.discover_shared_workspaces(AppState.user_email, AppState.drive_service)
+                self.after(0, lambda: self._refresh_workspaces(scan=True))
+                print(f"[Import] Projeto '{project['name']}' importado e sincronizado localmente.")
+            except Exception as e:
+                print(f"Erro ao importar projeto compartilhado: {e}")
+
+        import threading
+        threading.Thread(target=run_import, daemon=True).start()
 
     def _on_logout(self) -> None:
         from state import AppState

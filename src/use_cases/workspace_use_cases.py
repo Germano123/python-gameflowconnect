@@ -1630,5 +1630,57 @@ class WorkspaceManagerUseCase:
         except Exception as e:
             print(f"Erro no motor de sincronização com o registro Drive: {e}")
 
+    def list_importable_shared_workspaces(self, user_email: str, drive_service) -> List[dict]:
+        """
+        Retorna a lista de workspaces compartilhados no Drive que estão ignorados ou não cadastrados localmente.
+        """
+        if not drive_service or not drive_service.is_authenticated:
+            return []
+            
+        importable = []
+        try:
+            # 1. Obter workspaces já cadastrados localmente
+            conn = self._db.get_connection()
+            try:
+                cursor = conn.execute("SELECT id FROM local_workspaces")
+                local_ids = {row["id"] for row in cursor.fetchall()}
+            finally:
+                conn.close()
+
+            # 2. Obter workspaces do registro central
+            registry = drive_service.read_gameflow_registry()
+            remote_workspaces = registry.get("workspaces", [])
+
+            for w in remote_workspaces:
+                ws_id = w.get("id")
+                if ws_id and ws_id not in local_ids:
+                    # Obter dados do manifesto correspondente no Drive
+                    folder_id = w.get("drive_folder_id")
+                    manifest_file_id = drive_service.find_file_in_folder(folder_id, "manifest.json")
+                    if not manifest_file_id:
+                        gameflow_folder_id = drive_service.find_file_in_folder(folder_id, ".gameflow")
+                        if gameflow_folder_id:
+                            manifests_folder_id = drive_service.find_file_in_folder(gameflow_folder_id, "manifests")
+                            if manifests_folder_id:
+                                manifest_file_id = drive_service.find_file_in_folder(manifests_folder_id, "project.json")
+                    
+                    if manifest_file_id:
+                        metadata = drive_service.read_json_file(manifest_file_id)
+                        members = metadata.get("members", [])
+                        if "users" in metadata and not members:
+                            members = list(metadata["users"].keys())
+                        
+                        if user_email in members:
+                            importable.append({
+                                "id": ws_id,
+                                "name": w.get("name"),
+                                "drive_folder_id": folder_id,
+                                "description": metadata.get("description", ""),
+                                "engine": metadata.get("engine", "Godot")
+                            })
+        except Exception as e:
+            print(f"Erro ao listar workspaces importáveis: {e}")
+        return importable
+
 
 
