@@ -38,6 +38,8 @@ class FileCard(ctk.CTkFrame):
         on_sync: Optional[Callable] = None,
         on_rename: Optional[Callable] = None,
         on_delete: Optional[Callable] = None,
+        on_categorize: Optional[Callable] = None,
+        category: Optional[str] = None,
         is_uploading: bool = False,
         **kwargs,
     ):
@@ -52,12 +54,13 @@ class FileCard(ctk.CTkFrame):
         self._on_sync = on_sync
         self._on_rename = on_rename
         self._on_delete = on_delete
-        self._build(name, mime_type, size, modified, status_text, is_uploading)
+        self._on_categorize = on_categorize
+        self._build(name, mime_type, size, modified, status_text, category, is_uploading)
 
         if on_click and not is_uploading:
             self._bind_click(self)
 
-    def _build(self, name: str, mime_type: str, size: Optional[str], modified: Optional[str], status_text: Optional[str], is_uploading: bool) -> None:
+    def _build(self, name: str, mime_type: str, size: Optional[str], modified: Optional[str], status_text: Optional[str], category: Optional[str], is_uploading: bool) -> None:
         self.grid_columnconfigure(1, weight=1)
 
         # Icon label
@@ -71,15 +74,43 @@ class FileCard(ctk.CTkFrame):
         )
         icon_lbl.grid(row=0, column=0, rowspan=2, padx=(10, 8), pady=10, sticky="ns")
 
-        # File name
+        # File name layout frame to align name and badge
+        name_frame = ctk.CTkFrame(self, fg_color="transparent")
+        name_frame.grid(row=0, column=1, sticky="ew", padx=(0, 10), pady=(8, 0))
+
         name_lbl = ctk.CTkLabel(
-            self,
+            name_frame,
             text=name,
             font=ctk.CTkFont(family="Arial", size=12, weight="bold"),
             text_color="gray50" if is_uploading else "#ffffff",
             anchor="w",
         )
-        name_lbl.grid(row=0, column=1, sticky="ew", padx=(0, 10), pady=(8, 0))
+        name_lbl.pack(side="left")
+
+        if category and not is_uploading:
+            if category == "art":
+                bg_color = "#8a2be2"  # Roxo
+                label_text = "Arte"
+            elif category == "programming":
+                bg_color = "#00bbf9"  # Azul
+                label_text = "Programação"
+            elif category == "design":
+                bg_color = "#fb5607"  # Laranja
+                label_text = "Design"
+            else:
+                bg_color = "gray"
+                label_text = category.capitalize()
+
+            badge = ctk.CTkFrame(name_frame, fg_color=bg_color, corner_radius=4, height=18)
+            badge.pack(side="left", padx=(10, 0))
+            badge_lbl = ctk.CTkLabel(
+                badge, 
+                text=label_text, 
+                font=ctk.CTkFont(size=9, weight="bold"), 
+                text_color="#ffffff",
+                height=14
+            )
+            badge_lbl.pack(padx=6, pady=1)
 
         # Metadata row
         meta_parts = []
@@ -102,9 +133,22 @@ class FileCard(ctk.CTkFrame):
         meta_lbl.grid(row=1, column=1, sticky="ew", padx=(0, 10), pady=(0, 8))
 
         # Action buttons on the right (disabled during upload)
-        if not is_uploading and (self._on_sync or self._on_rename or self._on_delete):
+        if not is_uploading and (self._on_sync or self._on_rename or self._on_delete or self._on_categorize):
             actions_frame = ctk.CTkFrame(self, fg_color="transparent")
             actions_frame.grid(row=0, column=2, rowspan=2, padx=(4, 10), pady=8, sticky="e")
+
+            if self._on_categorize:
+                categorize_btn = ctk.CTkButton(
+                    actions_frame,
+                    text="🏷️",
+                    font=ctk.CTkFont(size=12),
+                    fg_color="#1a3743",
+                    hover_color="#2d5266",
+                    height=26,
+                    width=30,
+                    command=self._on_categorize,
+                )
+                categorize_btn.pack(side="left", padx=2)
 
             if self._on_rename:
                 rename_btn = ctk.CTkButton(

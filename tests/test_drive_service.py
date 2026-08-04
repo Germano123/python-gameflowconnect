@@ -17,7 +17,8 @@ class TestDriveServiceAuthentication(unittest.TestCase):
         """Should load credentials from token.json when it exists and is valid."""
         from services.drive import DriveService
 
-        mock_exists.side_effect = lambda path: path == "token.json"
+        # Mapeia caminho absoluto
+        mock_exists.side_effect = lambda path: "token.json" in path
         mock_creds = MagicMock()
         mock_creds.valid = True
         mock_creds_from_file.return_value = mock_creds
@@ -29,13 +30,15 @@ class TestDriveServiceAuthentication(unittest.TestCase):
         self.assertTrue(service.is_authenticated)
 
     @patch("services.drive.os.path.exists")
-    @patch("services.drive.InstalledAppFlow.from_client_secrets_file")
+    @patch("services.drive.InstalledAppFlow.from_client_config")
     @patch("services.drive.build")
+    @patch.dict("os.environ", {"GOOGLE_CLIENT_ID": "mock_id", "GOOGLE_CLIENT_SECRET": "mock_secret"})
     def test_authenticate_launches_oauth_when_no_token(self, mock_build, mock_flow_cls, mock_exists):
         """Should launch OAuth flow when token.json does not exist."""
         from services.drive import DriveService
 
-        mock_exists.side_effect = lambda path: path == "credentials.json"
+        # token.json não existe, credentials.json também não precisa
+        mock_exists.side_effect = lambda path: False
         mock_creds = MagicMock()
         mock_creds.valid = True
         mock_creds.to_json.return_value = "{}"

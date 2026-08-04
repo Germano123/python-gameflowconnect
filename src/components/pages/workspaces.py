@@ -1,4 +1,5 @@
 import customtkinter as ctk
+from typing import Optional
 import threading
 import os
 import shutil
@@ -344,6 +345,25 @@ class WorkspacesPage(DefaultLayout):
         self._refresh_workspace_assets(ws)
         self.after(10, lambda: self._refresh_workspaces(scan=False))
 
+        # Sincronização automática de abertura coordenada por callback
+        def run_initial_sync():
+            try:
+                from state import AppState
+                from use_cases import WorkspaceManagerUseCase
+                manager = WorkspaceManagerUseCase()
+                
+                # Executa a sincronização e agenda o refresh da tela após conclusão
+                manager.sync_workspace_metadata(
+                    ws, 
+                    AppState.drive_service,
+                    on_complete=lambda: self.after(0, lambda: self._refresh_workspace_assets(ws))
+                )
+            except Exception as e:
+                print(f"Erro na sincronização automática coordenada: {e}")
+
+        threading.Thread(target=run_initial_sync, daemon=True).start()
+
+
 
 
     def _refresh_workspace_assets(self, ws) -> None:
@@ -432,6 +452,8 @@ class WorkspacesPage(DefaultLayout):
                             status_txt = "Nuvem"
                         elif asset.status.name == "LOCAL_ONLY":
                             status_txt = "Pendente de Envio"
+                        elif asset.status.name == "UNTRACKED_REMOTE":
+                            status_txt = "Novo no Drive (Confirmar)"
 
                         is_dir = asset.mime_type == "application/vnd.google-apps.folder"
 
@@ -448,9 +470,11 @@ class WorkspacesPage(DefaultLayout):
                             modified=asset.modified_time,
                             status_text=status_txt,
                             on_click=click_cmd,
-                            on_sync=None if is_dir else (lambda a=asset: self._sync_asset_action(ws, a)),
+                            on_sync=(lambda a=asset: self._sync_folder_action(ws, a.name)) if is_dir else (lambda a=asset: self._sync_asset_action(ws, a)),
                             on_rename=lambda a=asset: self._rename_item_prompt(ws, a.name),
                             on_delete=lambda a=asset: self._delete_item_confirm(ws, a.name),
+                            on_categorize=lambda a=asset: self._open_categorize_modal(ws, a.name, a.category),
+                            category=asset.category,
                             is_uploading=is_uploading
                         )
                         card.pack(fill="x", padx=4, pady=3)
@@ -677,6 +701,140 @@ class WorkspacesPage(DefaultLayout):
 
         threading.Thread(target=run, daemon=True).start()
 
+    def _sync_folder_action(self, ws, folder_name: str) -> None:
+        from state import AppState
+        from use_cases import WorkspaceManagerUseCase
+
+        # Feedback na UI
+        loading = ctk.CTkToplevel(self._parent)
+        loading.title("Sincronizando...")
+        loading.geometry("320x150")
+        loading.grab_set()
+
+        ctk.CTkLabel(
+            loading,
+            text=f"Sincronizando pasta recursivamente...\n{folder_name}",
+            font=ctk.CTkFont(size=12, weight="bold")
+        ).pack(pady=20)
+
+        progressbar = ctk.CTkProgressBar(loading, mode="indeterminate", width=220)
+        progressbar.pack(pady=10)
+        progressbar.start()
+
+        def run():
+            manager = WorkspaceManagerUseCase()
+            success = manager.sync_folder(
+                workspace_id=ws.id,
+                folder_name=folder_name,
+                drive_service=AppState.drive_service,
+                author_email=AppState.user_email,
+                subpath=self._current_subpath
+            )
+            
+            def finish():
+                try:
+                    progressbar.stop()
+                    loading.destroy()
+                except Exception:
+                    pass
+                if success:
+                    ModalDialog(
+                        self._parent,
+                        title="Sucesso",
+                        message=f"Pasta '{folder_name}' sincronizada com sucesso recursivamente!",
+                        cancel_label="Fechar"
+                    )
+                else:
+                    ModalDialog(
+                        self._parent,
+                        title="Erro",
+                        message=f"Houve falhas ao sincronizar alguns arquivos da pasta '{folder_name}'.",
+                        cancel_label="Fechar"
+                    )
+                self._refresh_workspace_assets(ws)
+
+            self.after(0, finish)
+
+        threading.Thread(target=run, daemon=True).start()
+
+    def _open_categorize_modal(self, ws, item_name: str, current_category: Optional[str]) -> None:
+        modal = ctk.CTkToplevel(self._parent)
+        modal.title(f"Categorizar: {item_name}")
+        modal.geometry("380x280")
+        modal.grab_set()
+
+        ctk.CTkLabel(
+            modal, 
+            text=f"Definir Categoria\n{item_name}", 
+            font=ctk.CTkFont(size=14, weight="bold"),
+            justify="center"
+        ).pack(pady=15)
+
+        def set_category(cat: Optional[str]):
+            from state import AppState
+            from use_cases import WorkspaceManagerUseCase
+            
+            manager = WorkspaceManagerUseCase()
+            success = manager.set_item_category(
+                workspace_id=ws.id,
+                item_subpath=self._current_subpath,
+                item_name=item_name,
+                category=cat,
+                drive_service=AppState.drive_service
+            )
+            modal.destroy()
+            if success:
+                self._refresh_workspace_assets(ws)
+
+        # Botões de Categoria
+        # 1. Arte (Roxo)
+        btn_art = ctk.CTkButton(
+            modal,
+            text="🎨 Arte (Roxo)",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            fg_color="#8a2be2",
+            hover_color="#7022b8",
+            height=32,
+            command=lambda: set_category("art")
+        )
+        btn_art.pack(padx=30, pady=6, fill="x")
+
+        # 2. Programação (Azul)
+        btn_prog = ctk.CTkButton(
+            modal,
+            text="💻 Programação (Azul)",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            fg_color="#00bbf9",
+            hover_color="#0099cc",
+            height=32,
+            command=lambda: set_category("programming")
+        )
+        btn_prog.pack(padx=30, pady=6, fill="x")
+
+        # 3. Design (Laranja)
+        btn_des = ctk.CTkButton(
+            modal,
+            text="📐 Design (Laranja)",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            fg_color="#fb5607",
+            hover_color="#cc4400",
+            height=32,
+            command=lambda: set_category("design")
+        )
+        btn_des.pack(padx=30, pady=6, fill="x")
+
+        # 4. Remover / Limpar
+        btn_clear = ctk.CTkButton(
+            modal,
+            text="❌ Limpar Categoria",
+            font=ctk.CTkFont(size=12),
+            fg_color="#2b2b2b",
+            hover_color="#3b3b3b",
+            height=30,
+            command=lambda: set_category(None)
+        )
+        btn_clear.pack(padx=30, pady=(15, 6), fill="x")
+
     def _click_new_workspace(self) -> None:
         from state import AppState
         # 1. Validar que a conta do Google Drive está conectada
@@ -726,6 +884,8 @@ class WorkspacesPage(DefaultLayout):
         )
         engine_dropdown.pack(padx=20, pady=4, fill="x")
 
+        save_btn_wrapper = []
+
         def save():
             from state import AppState
             name = name_in.get().strip()
@@ -746,20 +906,61 @@ class WorkspacesPage(DefaultLayout):
 
             suggested_path = os.path.join(self._base_dir_var.get(), name)
 
-            from use_cases import WorkspaceManagerUseCase
-            manager = WorkspaceManagerUseCase()
-            manager.create_workspace(
-                name=name,
-                description=desc,
-                engine=engine,
-                owner=AppState.user_email,
-                drive_service=AppState.drive_service,
-                local_path=suggested_path
-            )
-            modal.destroy()
-            self._refresh_workspaces()
+            # Ocultar formulário de entrada para exibir o loading limpo
+            name_in.pack_forget()
+            desc_in.pack_forget()
+            engine_dropdown.pack_forget()
+            if save_btn_wrapper:
+                save_btn_wrapper[0].pack_forget()
 
-        ButtonComponent(modal, label="Salvar Workspace", variant="success", onClick=save).pack(pady=20)
+            # Label de feedback
+            status_label = ctk.CTkLabel(
+                modal, 
+                text="Criando estrutura do Workspace...\nPor favor, aguarde enquanto sincronizamos com o Drive.",
+                font=ctk.CTkFont(size=12)
+            )
+            status_label.pack(pady=30)
+
+            # Barra de progresso
+            progressbar = ctk.CTkProgressBar(modal, mode="indeterminate", width=300, fg_color="#1e3743", progress_color="#2d5266")
+            progressbar.pack(pady=10)
+            progressbar.start()
+
+            import threading
+
+            def run_creation():
+                try:
+                    from use_cases import WorkspaceManagerUseCase
+                    manager = WorkspaceManagerUseCase()
+                    manager.create_workspace(
+                        name=name,
+                        description=desc,
+                        engine=engine,
+                        owner=AppState.user_email,
+                        drive_service=AppState.drive_service,
+                        local_path=suggested_path
+                    )
+                except Exception as e:
+                    print(f"Erro ao criar workspace em background thread: {e}")
+                
+                # Chamar fechamento do modal na main thread do Tkinter
+                modal.after(100, on_finish)
+
+            def on_finish():
+                try:
+                    progressbar.stop()
+                    modal.destroy()
+                except Exception:
+                    pass
+                self._refresh_workspaces()
+
+            thread = threading.Thread(target=run_creation)
+            thread.daemon = True
+            thread.start()
+
+        btn = ButtonComponent(modal, label="Salvar Workspace", variant="success", onClick=save)
+        btn.pack(pady=20)
+        save_btn_wrapper.append(btn)
 
     def _open_invite_modal(self) -> None:
         if not self._selected_workspace_id:

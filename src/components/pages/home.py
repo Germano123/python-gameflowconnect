@@ -65,7 +65,7 @@ class HomePage(ctk.CTkFrame):
         # Version badge
         ctk.CTkLabel(
             card,
-            text="v2.0.0  ·  Alpha",
+            text="v2.1.0  ·  Alpha",
             font=ctk.CTkFont(family="Arial", size=10),
             text_color="#4a7a94",
         ).grid(row=4, column=0, pady=(6, 0))

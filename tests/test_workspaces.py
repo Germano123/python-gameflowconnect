@@ -29,6 +29,8 @@ class TestWorkspaceManagement(unittest.TestCase):
             print(f"\nAviso tearDownClass: {e}")
 
     def setUp(self):
+        from state import AppState
+        AppState.local_base_dir = self.test_db_dir
         self.manager = WorkspaceManagerUseCase(db_dir=self.test_db_dir)
         
         # Limpar registros entre testes
@@ -63,8 +65,8 @@ class TestWorkspaceManagement(unittest.TestCase):
         self.assertEqual(workspaces[0].id, ws.id)
         self.assertEqual(workspaces[0].engine, "Godot")
 
-        # Verificar se a pasta oculta .gameflow, manifest.json e config.json foram gerados
-        manifest_path = os.path.join(self.test_db_dir, "RPG_Godot", ".gameflow", "manifest.json")
+        # Verificar se a pasta oculta .gameflow, manifests/project.json e config.json foram gerados
+        manifest_path = os.path.join(self.test_db_dir, "RPG_Godot", ".gameflow", "manifests", "project.json")
         config_path = os.path.join(self.test_db_dir, "RPG_Godot", ".gameflow", "config.json")
         self.assertTrue(os.path.exists(manifest_path))
         self.assertTrue(os.path.exists(config_path))
@@ -72,7 +74,7 @@ class TestWorkspaceManagement(unittest.TestCase):
         import json
         with open(manifest_path, "r", encoding="utf-8") as f:
             data = json.load(f)
-            self.assertEqual(data["id"], ws.id)
+            self.assertEqual(data["project_id"], ws.id)
             self.assertEqual(data["engine"], "Godot")
 
     def test_sqlite_delete_workspace(self):
@@ -99,7 +101,8 @@ class TestWorkspaceManagement(unittest.TestCase):
             description="Anexo de mídias",
             engine="Godot",
             owner="designer@gameflow.io",
-            drive_service=None
+            drive_service=None,
+            local_path=os.path.join(self.test_db_dir, "assets_test_ws")
         )
 
         asset = Asset(name="hero_run.png", mime_type="image/png", size=20480)
@@ -352,6 +355,206 @@ class TestWorkspaceManagement(unittest.TestCase):
 
         # Deve ter sido deletado localmente
         self.assertIsNone(self.manager.get_workspace_by_id("ws_remote_123"))
+
+    def test_set_and_load_item_category(self):
+        # Criar workspace temporário
+        ws = self.manager.create_workspace(
+            name="Category Test Workspace",
+            description="Testing category assignment",
+            engine="Godot",
+            owner="test@gameflow.io",
+            drive_service=None,
+            local_path=os.path.join(self.test_db_dir, "category_ws")
+        )
+        self.assertIsNotNone(ws)
+        
+        # 1. Definir categoria para arquivo e pasta
+        success1 = self.manager.set_item_category(ws.id, "Assets/Art", "character.png", "art", None)
+        success2 = self.manager.set_item_category(ws.id, "Scripts", "Movement.gd", "programming", None)
+        success3 = self.manager.set_item_category(ws.id, "Assets", "LevelDesign", "design", None)
+        
+        self.assertTrue(success1)
+        self.assertTrue(success2)
+        self.assertTrue(success3)
+        
+        # 2. Carregar as categorias localmente
+        categories = self.manager._load_categories(ws.local_path)
+        self.assertEqual(categories.get("Assets/Art/character.png"), "art")
+        self.assertEqual(categories.get("Scripts/Movement.gd"), "programming")
+        self.assertEqual(categories.get("Assets/LevelDesign"), "design")
+
+    def test_sync_folder_recursive_dry(self):
+        # Criar workspace temporário
+        ws = self.manager.create_workspace(
+            name="Recursive Sync Workspace",
+            description="Testing recursive folder synchronization",
+            engine="Godot",
+            owner="test@gameflow.io",
+            drive_service=None,
+            local_path=os.path.join(self.test_db_dir, "recursive_ws")
+        )
+        self.assertIsNotNone(ws)
+
+        # Apenas testando que a lógica de DFS resolve com sucesso mesmo sem Drive ativo
+        # (retorna True por padrão no dry run offline ou se demo_folder for ativa)
+        success = self.manager.sync_folder(ws.id, "Art", None, "test@gameflow.io")
+        self.assertTrue(success)
+
+    def test_gameflow_folder_is_hidden(self):
+        # 1. Simular uma resposta da API do Drive com .gameflow contido na raiz
+        class MockDriveWithGameflow:
+            def __init__(self):
+                self.is_authenticated = True
+                self._service = self
+                
+            def files(self):
+                return self
+                
+            def list(self, q, fields):
+                return self
+                
+            def execute(self, http=None):
+                return {
+                    "files": [
+                        {"id": "id_normal", "name": "Assets", "mimeType": "application/vnd.google-apps.folder"},
+                        {"id": "id_gameflow", "name": ".gameflow", "mimeType": "application/vnd.google-apps.folder"},
+                        {"id": "id_manifest", "name": "manifest.json", "mimeType": "application/json"}
+                    ]
+                }
+                
+            def get_or_create_root_folder(self, name):
+                return "root_id"
+                
+            def read_json_file(self, file_id):
+                return {}
+                
+            def find_file_in_folder(self, parent_id, name):
+                return None
+                
+            def _get_http(self):
+                return None
+
+        # 2. Criar workspace temporário
+        ws = self.manager.create_workspace(
+            name="Hidden Test Workspace",
+            description="Testing hidden gameflow folder",
+            engine="Godot",
+            owner="test@gameflow.io",
+            drive_service=None,
+            local_path=os.path.join(self.test_db_dir, "hidden_ws")
+        )
+        self.assertIsNotNone(ws)
+
+        # Forçar drive_folder_id diferente de demo_folder no SQLite para processar a nuvem
+        conn = self.manager._db.get_connection()
+        try:
+            conn.execute("UPDATE local_workspaces SET drive_folder_id = 'real_folder_id' WHERE id = ?", (ws.id,))
+            conn.commit()
+        finally:
+            conn.close()
+        ws.drive_folder_id = "real_folder_id"
+
+        # 3. Chamar a listagem e verificar que .gameflow e manifest.json foram ocultados
+        mock_drive = MockDriveWithGameflow()
+        assets = self.manager.get_workspace_assets_sync_status(ws.id, mock_drive)
+        
+        # .gameflow não deve estar nos assets listados
+        self.assertFalse(any(a.name == ".gameflow" for a in assets))
+        # manifest.json não deve estar nos assets listados
+        self.assertFalse(any(a.name == "manifest.json" for a in assets))
+        # A pasta normal 'Assets' deve estar listada
+        self.assertTrue(any(a.name == "Assets" for a in assets))
+
+    def test_sync_workspace_metadata_dry(self):
+        ws = self.manager.create_workspace(
+            name="Metadata Sync Workspace",
+            description="Testing metadata sync",
+            engine="Godot",
+            owner="test@gameflow.io",
+            drive_service=None,
+            local_path=os.path.join(self.test_db_dir, "metadata_ws")
+        )
+        self.assertIsNotNone(ws)
+        # Executar com drive inativo ou demo_folder (deve retornar True e ser ignorado silenciosamente)
+        self.manager.sync_workspace_metadata(ws, None)
+
+    def test_untracked_remote_detection(self):
+        from domain import SyncStatus
+        # 1. Simular uma resposta da API do Drive com arquivos na raiz
+        class MockDriveWithUntracked:
+            def __init__(self):
+                self.is_authenticated = True
+                self._service = self
+                
+            def files(self):
+                return self
+                
+            def list(self, q, fields):
+                return self
+                
+            def execute(self, http=None):
+                return {
+                    "files": [
+                        {"id": "untracked_id_123", "name": "externo.png", "mimeType": "image/png", "size": 2048, "modifiedTime": "2026-08-03T20:00:00Z"}
+                    ]
+                }
+                
+            def get_or_create_root_folder(self, name):
+                return "root_id"
+                
+            def read_json_file(self, file_id):
+                return {}
+                
+            def find_file_in_folder(self, parent_id, name):
+                return None
+                
+            def _get_http(self):
+                return None
+
+        # 2. Criar workspace temporário
+        ws = self.manager.create_workspace(
+            name="Untracked Test Workspace",
+            description="Testing untracked files detection",
+            engine="Godot",
+            owner="test@gameflow.io",
+            drive_service=None,
+            local_path=os.path.join(self.test_db_dir, "untracked_ws")
+        )
+        self.assertIsNotNone(ws)
+
+        # Forçar ID diferente de demo_folder no SQLite para buscar na nuvem
+        conn = self.manager._db.get_connection()
+        try:
+            conn.execute("UPDATE local_workspaces SET drive_folder_id = 'real_folder_id' WHERE id = ?", (ws.id,))
+            conn.commit()
+        finally:
+            conn.close()
+        ws.drive_folder_id = "real_folder_id"
+
+        # 3. Chamar a listagem e verificar que o arquivo remoto foi marcado como UNTRACKED_REMOTE
+        mock_drive = MockDriveWithUntracked()
+        assets = self.manager.get_workspace_assets_sync_status(ws.id, mock_drive)
+        
+        self.assertEqual(len(assets), 1)
+        self.assertEqual(assets[0].name, "externo.png")
+        self.assertEqual(assets[0].status, SyncStatus.UNTRACKED_REMOTE)
+
+        # 4. Marcar como trackeado e listar novamente (agora deve vir como REMOTE_ONLY)
+        self.manager.mark_file_as_tracked(ws.id, "untracked_id_123", "externo.png", mock_drive)
+        
+        # Invalidar o cache da listagem no teste para forçar recarga
+        cache = self.manager._load_remote_cache(ws.local_path)
+        if "" in cache.get("subpaths", {}):
+            cache["subpaths"][""]["timestamp"] = 0
+            self.manager._save_remote_cache(ws.local_path, cache)
+
+        assets2 = self.manager.get_workspace_assets_sync_status(ws.id, mock_drive)
+        self.assertEqual(len(assets2), 1)
+        self.assertEqual(assets2[0].name, "externo.png")
+        self.assertEqual(assets2[0].status, SyncStatus.REMOTE_ONLY)
+
+
+
 
 
 

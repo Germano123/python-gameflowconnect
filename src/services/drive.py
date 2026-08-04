@@ -214,7 +214,7 @@ class DriveService:
                 uri=f"download_file({file_id}) — {error.uri}",
             )
 
-    def get_or_create_root_folder(self, folder_name: str = "GameFlow") -> str:
+    def get_or_create_root_folder(self, folder_name: str = "GameFlow.app") -> str:
         self._require_auth()
         query = f"'root' in parents and name = '{folder_name}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
         results = self._service.files().list(q=query, fields="files(id)").execute(http=self._get_http())
@@ -305,11 +305,18 @@ class DriveService:
         except Exception:
             return False
 
+    def _get_or_create_registry_folder(self) -> str:
+        root_id = self.get_or_create_root_folder("GameFlow.app")
+        gameflow_folder_id = self.find_file_in_folder(root_id, ".gameflow")
+        if not gameflow_folder_id:
+            gameflow_folder_id = self.create_folder(".gameflow", parent_folder_id=root_id)
+        return gameflow_folder_id
+
     def read_gameflow_registry(self) -> dict:
         self._require_auth()
         try:
-            gameflow_root_id = self.get_or_create_root_folder("GameFlow")
-            file_id = self.find_file_in_folder(gameflow_root_id, "gameflow.json")
+            registry_folder_id = self._get_or_create_registry_folder()
+            file_id = self.find_file_in_folder(registry_folder_id, "gameflow.json")
             if file_id:
                 return self.read_json_file(file_id)
         except Exception as e:
@@ -319,12 +326,12 @@ class DriveService:
     def write_gameflow_registry(self, registry: dict) -> None:
         self._require_auth()
         try:
-            gameflow_root_id = self.get_or_create_root_folder("GameFlow")
-            file_id = self.find_file_in_folder(gameflow_root_id, "gameflow.json")
+            registry_folder_id = self._get_or_create_registry_folder()
+            file_id = self.find_file_in_folder(registry_folder_id, "gameflow.json")
             registry["version"] = "1.0.0"
             from datetime import datetime
             registry["last_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            self.write_json_file(gameflow_root_id, "gameflow.json", registry, file_id=file_id)
+            self.write_json_file(registry_folder_id, "gameflow.json", registry, file_id=file_id)
         except Exception as e:
             print(f"Erro ao escrever no registro gameflow.json: {e}")
 

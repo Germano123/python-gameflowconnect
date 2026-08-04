@@ -10,16 +10,23 @@ MODEL_3D_EXTENSIONS = {".fbx", ".obj", ".blend", ".gltf", ".glb"}
 @dataclass
 class Asset:
     """
-    Pure Domain Entity representing a Game Asset.
+    Pure Domain Entity representing a Game Asset in GFC-DVCS.
     Independent of frameworks, UI, or specific Cloud APIs.
     """
     name: str
-    id: Optional[str] = None
+    id: Optional[str] = None # ID no Drive (pode ser nulo para objetos no CAS)
     mime_type: Optional[str] = None
     size: Optional[int] = None
     modified_time: Optional[str] = None
     local_path: Optional[str] = None
     status: SyncStatus = SyncStatus.REMOTE_ONLY
+    uuid: Optional[str] = None # ID lógico fixo independente de renomeações/versões
+    content_hash: Optional[str] = None # Hash SHA256 do conteúdo
+    version_number: int = 1 # Versão sequencial imutável
+    creator: Optional[str] = None # Autor da alteração
+    created_at: Optional[str] = None # Data de criação
+    category: Optional[str] = None # 'art', 'programming', 'design' ou None
+
 
     @property
     def extension(self) -> str:

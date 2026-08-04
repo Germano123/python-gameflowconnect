@@ -28,7 +28,8 @@ class LocalFileAdapter(ILocalStorageRepository):
         return full_path
 
     def list_local_assets(self, asset_type: Optional[AssetType] = None) -> List[Asset]:
-        target_dir = self.ensure_category_directory(asset_type) if asset_type else os.path.join(self._project_path, "Assets")
+        sub_folder = self.CATEGORY_FOLDERS.get(asset_type) if asset_type else "Assets"
+        target_dir = os.path.join(self._project_path, sub_folder)
         if not os.path.exists(target_dir):
             return []
 

@@ -57,7 +57,7 @@ class LocalDatabase:
             # 2. Criar tabela de Assets vinculados a Workspaces
             conn.execute("""
             CREATE TABLE IF NOT EXISTS local_assets (
-                id TEXT PRIMARY KEY, -- ID do arquivo no Google Drive
+                id TEXT PRIMARY KEY, -- ID do arquivo no Google Drive (pode ser opcional para CAS)
                 workspace_id TEXT NOT NULL,
                 name TEXT NOT NULL,
                 mime_type TEXT,
@@ -65,6 +65,12 @@ class LocalDatabase:
                 local_path TEXT,
                 status TEXT NOT NULL, -- 'SYNCHRONIZED', 'LOCAL_ONLY', 'OUT_OF_SYNC'
                 last_sync TEXT,
+                uuid TEXT,
+                content_hash TEXT,
+                version_number INTEGER DEFAULT 1,
+                creator TEXT,
+                created_at TEXT,
+                category TEXT,
                 FOREIGN KEY(workspace_id) REFERENCES local_workspaces(id) ON DELETE CASCADE
             );
             """)
@@ -86,6 +92,59 @@ class LocalDatabase:
             );
             """)
 
+            # 5. Novas tabelas GFC-DVCS
+            conn.execute("""
+            CREATE TABLE IF NOT EXISTS local_commits (
+                hash TEXT PRIMARY KEY,
+                parents TEXT, -- string separada por virgulas
+                author TEXT NOT NULL,
+                message TEXT NOT NULL,
+                timestamp TEXT NOT NULL,
+                workspace_id TEXT NOT NULL,
+                FOREIGN KEY(workspace_id) REFERENCES local_workspaces(id) ON DELETE CASCADE
+            );
+            """)
+
+            conn.execute("""
+            CREATE TABLE IF NOT EXISTS local_branches (
+                name TEXT NOT NULL,
+                head_commit_hash TEXT,
+                workspace_id TEXT NOT NULL,
+                PRIMARY KEY (name, workspace_id),
+                FOREIGN KEY(workspace_id) REFERENCES local_workspaces(id) ON DELETE CASCADE
+            );
+            """)
+
+            conn.execute("""
+            CREATE TABLE IF NOT EXISTS local_locks (
+                asset_id TEXT PRIMARY KEY,
+                owner TEXT NOT NULL,
+                locked_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                workspace_id TEXT NOT NULL,
+                FOREIGN KEY(workspace_id) REFERENCES local_workspaces(id) ON DELETE CASCADE
+            );
+            """)
+
+            conn.execute("""
+            CREATE TABLE IF NOT EXISTS local_snapshots (
+                id TEXT PRIMARY KEY,
+                workspace_id TEXT NOT NULL,
+                state TEXT NOT NULL,
+                author TEXT NOT NULL,
+                description TEXT,
+                timestamp TEXT NOT NULL,
+                changes TEXT, -- JSON string
+                FOREIGN KEY(workspace_id) REFERENCES local_workspaces(id) ON DELETE CASCADE
+            );
+            """)
+
+            # Adicionar colunas novas caso o banco já existisse
+            for col, col_type in [("uuid", "TEXT"), ("content_hash", "TEXT"), ("version_number", "INTEGER DEFAULT 1"), ("creator", "TEXT"), ("created_at", "TEXT"), ("category", "TEXT")]:
+                try:
+                    conn.execute(f"ALTER TABLE local_assets ADD COLUMN {col} {col_type};")
+                except sqlite3.OperationalError:
+                    pass
 
             try:
                 conn.execute("ALTER TABLE user_profiles ADD COLUMN github_token TEXT;")
