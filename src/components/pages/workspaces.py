@@ -127,30 +127,45 @@ class WorkspacesPage(DefaultLayout):
             onClick=self._click_new_workspace,
         ).pack(side="right", pady=(0, 10))
 
+        # Hambúrguer FAB flutuante para reexibir painel esquerdo
+        self._hamburger_btn = ctk.CTkButton(
+            cf,
+            text="☰ Projetos",
+            font=ctk.CTkFont(family="Arial", size=11, weight="bold"),
+            fg_color="#1a3743",
+            hover_color="#2d5266",
+            border_width=1,
+            border_color="#2d4a5a",
+            corner_radius=18,
+            width=100,
+            height=36,
+            command=self._show_left_panel
+        )
+
         # Left Column: Workspace List
-        left_panel = ctk.CTkFrame(cf, corner_radius=12, border_width=1, border_color="#2d4a5a", fg_color="#162c38")
-        left_panel.grid(row=1, column=0, sticky="nsew", padx=(20, 10), pady=(0, 20))
-        left_panel.grid_rowconfigure(1, weight=1)
-        left_panel.grid_columnconfigure(0, weight=1)
+        self._left_panel = ctk.CTkFrame(cf, corner_radius=12, border_width=1, border_color="#2d4a5a", fg_color="#162c38")
+        self._left_panel.grid(row=1, column=0, sticky="nsew", padx=(20, 10), pady=(0, 20))
+        self._left_panel.grid_rowconfigure(1, weight=1)
+        self._left_panel.grid_columnconfigure(0, weight=1)
 
         ctk.CTkLabel(
-            left_panel,
+            self._left_panel,
             text="Meus Workspaces",
             font=ctk.CTkFont(family="Arial", size=13, weight="bold"),
             text_color="#ffffff",
         ).grid(row=0, column=0, padx=14, pady=12, sticky="w")
 
-        self._workspaces_scroll = ctk.CTkScrollableFrame(left_panel, fg_color="transparent")
+        self._workspaces_scroll = ctk.CTkScrollableFrame(self._left_panel, fg_color="transparent")
         self._workspaces_scroll.grid(row=1, column=0, sticky="nsew", padx=6, pady=6)
 
         # Right Column: Selected Workspace Detail & Asset Sync
-        right_panel = ctk.CTkFrame(cf, corner_radius=12, border_width=1, border_color="#2d4a5a", fg_color="#162c38")
-        right_panel.grid(row=1, column=1, sticky="nsew", padx=(10, 20), pady=(0, 20))
-        right_panel.grid_rowconfigure(2, weight=1)
-        right_panel.grid_columnconfigure(0, weight=1)
+        self._right_panel = ctk.CTkFrame(cf, corner_radius=12, border_width=1, border_color="#2d4a5a", fg_color="#162c38")
+        self._right_panel.grid(row=1, column=1, sticky="nsew", padx=(10, 20), pady=(0, 20))
+        self._right_panel.grid_rowconfigure(2, weight=1)
+        self._right_panel.grid_columnconfigure(0, weight=1)
 
         # Workspace header
-        self._ws_header_frame = ctk.CTkFrame(right_panel, fg_color="transparent")
+        self._ws_header_frame = ctk.CTkFrame(self._right_panel, fg_color="transparent")
         self._ws_header_frame.grid(row=0, column=0, sticky="ew", padx=16, pady=12)
 
         self._ws_title_lbl = ctk.CTkLabel(
@@ -171,7 +186,7 @@ class WorkspacesPage(DefaultLayout):
         self._ws_desc_lbl.pack(anchor="w", pady=(2, 0))
 
         # Workspace Action Toolbar (Invite members & Add asset & Delete)
-        self._ws_actions_frame = ctk.CTkFrame(right_panel, fg_color="transparent")
+        self._ws_actions_frame = ctk.CTkFrame(self._right_panel, fg_color="transparent")
         self._ws_actions_frame.grid(row=1, column=0, sticky="ew", padx=16, pady=(0, 10))
 
         ButtonComponent(
@@ -198,9 +213,27 @@ class WorkspacesPage(DefaultLayout):
             onClick=self._delete_workspace_action,
         ).pack(side="right")
 
-        # Workspace Assets Scroll
-        self._assets_scroll = ctk.CTkScrollableFrame(right_panel, fg_color="transparent")
-        self._assets_scroll.grid(row=2, column=0, sticky="nsew", padx=6, pady=6)
+        # Tabview para dados locais/remotos e versão original do Drive
+        self._tabview = ctk.CTkTabview(self._right_panel, fg_color="transparent")
+        self._tabview.grid(row=2, column=0, sticky="nsew", padx=10, pady=(0, 10))
+        
+        # Adicionar abas
+        self._tabview.add("Versão do Workspace")
+        self._tabview.add("Nuvem (Drive)")
+        
+        # Grid settings das abas para expandir os filhos
+        self._tabview.tab("Versão do Workspace").grid_columnconfigure(0, weight=1)
+        self._tabview.tab("Versão do Workspace").grid_rowconfigure(0, weight=1)
+        self._tabview.tab("Nuvem (Drive)").grid_columnconfigure(0, weight=1)
+        self._tabview.tab("Nuvem (Drive)").grid_rowconfigure(0, weight=1)
+
+        # Workspace Assets Scroll (Versão do Workspace)
+        self._assets_scroll = ctk.CTkScrollableFrame(self._tabview.tab("Versão do Workspace"), fg_color="transparent")
+        self._assets_scroll.grid(row=0, column=0, sticky="nsew", padx=2, pady=2)
+
+        # Drive Assets Scroll (Nuvem Original)
+        self._drive_scroll = ctk.CTkScrollableFrame(self._tabview.tab("Nuvem (Drive)"), fg_color="transparent")
+        self._drive_scroll.grid(row=0, column=0, sticky="nsew", padx=2, pady=2)
 
     def on_show(self) -> None:
         self._refresh_workspaces(scan=True)
@@ -344,6 +377,7 @@ class WorkspacesPage(DefaultLayout):
         self._ws_desc_lbl.configure(text=f"{ws.description}\nProprietário: {ws.owner}\nMembros: {members_str}")
         self._refresh_workspace_assets(ws)
         self.after(10, lambda: self._refresh_workspaces(scan=False))
+        self._collapse_left_panel()
 
         # Sincronização automática de abertura coordenada por callback
         def run_initial_sync():
@@ -363,6 +397,16 @@ class WorkspacesPage(DefaultLayout):
 
         threading.Thread(target=run_initial_sync, daemon=True).start()
 
+    def _collapse_left_panel(self) -> None:
+        self._left_panel.grid_remove()
+        self._right_panel.grid(row=1, column=0, columnspan=2, sticky="nsew", padx=20, pady=(0, 20))
+        self._hamburger_btn.place(relx=0.03, rely=0.92, anchor="sw")
+
+    def _show_left_panel(self) -> None:
+        self._hamburger_btn.place_forget()
+        self._left_panel.grid()
+        self._right_panel.grid(row=1, column=1, columnspan=1, sticky="nsew", padx=(10, 20), pady=(0, 20))
+
 
 
 
@@ -371,8 +415,10 @@ class WorkspacesPage(DefaultLayout):
         from state import AppState
         import threading
 
-        # Limpar área de assets
+        # Limpar as duas abas
         for w in self._assets_scroll.winfo_children():
+            w.destroy()
+        for w in self._drive_scroll.winfo_children():
             w.destroy()
 
         # 1. ── Barra de Navegação Superior (Sempre visível para resposta imediata) ───────────────────────────────
@@ -433,14 +479,23 @@ class WorkspacesPage(DefaultLayout):
                     loading_frame.destroy()
 
                     if not assets:
+                        # Vazio na Versão do Workspace
                         ctk.CTkLabel(
                             self._assets_scroll,
                             text="Esta pasta está vazia.\nColoque arquivos na pasta local do projeto ou clique em 'Enviar Asset'.",
                             font=ctk.CTkFont(family="Arial", size=11),
                             text_color="gray50",
                         ).pack(pady=40)
+                        # Vazio na Nuvem
+                        ctk.CTkLabel(
+                            self._drive_scroll,
+                            text="Nenhum arquivo encontrado no Drive para esta pasta.",
+                            font=ctk.CTkFont(family="Arial", size=11),
+                            text_color="gray50",
+                        ).pack(pady=40)
                         return
 
+                    # 1. Preencher aba "Versão do Workspace"
                     for asset in assets:
                         rel_key = os.path.join(target_subpath, asset.name).replace("\\", "/")
                         is_uploading = rel_key in self._uploading_files
@@ -454,6 +509,8 @@ class WorkspacesPage(DefaultLayout):
                             status_txt = "Pendente de Envio"
                         elif asset.status.name == "UNTRACKED_REMOTE":
                             status_txt = "Novo no Drive (Confirmar)"
+                        elif asset.status.name == "OUT_OF_SYNC":
+                            status_txt = "Deletado no Drive (Pendente)"
 
                         is_dir = asset.mime_type == "application/vnd.google-apps.folder"
 
@@ -478,6 +535,52 @@ class WorkspacesPage(DefaultLayout):
                             is_uploading=is_uploading
                         )
                         card.pack(fill="x", padx=4, pady=3)
+
+                    # 2. Preencher aba "Nuvem (Drive)"
+                    drive_assets = [a for a in assets if a.id is not None]
+                    if not drive_assets:
+                        ctk.CTkLabel(
+                            self._drive_scroll,
+                            text="Nenhum arquivo encontrado no Drive para esta pasta.",
+                            font=ctk.CTkFont(family="Arial", size=11),
+                            text_color="gray50",
+                        ).pack(pady=40)
+                    else:
+                        for asset in drive_assets:
+                            rel_key = os.path.join(target_subpath, asset.name).replace("\\", "/")
+                            is_uploading = rel_key in self._uploading_files
+
+                            status_txt = "No Drive"
+                            if is_uploading:
+                                status_txt = "Enviando..."
+                            elif asset.status.name == "REMOTE_ONLY":
+                                status_txt = "Nuvem"
+                            elif asset.status.name == "UNTRACKED_REMOTE":
+                                status_txt = "Novo no Drive (Confirmar)"
+
+                            is_dir = asset.mime_type == "application/vnd.google-apps.folder"
+
+                            if is_dir:
+                                click_cmd = lambda a=asset: self._enter_folder(ws, a.name)
+                            else:
+                                click_cmd = lambda a=asset: self._manage_file_modal(ws, a)
+
+                            card = FileCard(
+                                self._drive_scroll,
+                                name=asset.name,
+                                mime_type=asset.mime_type or "application/octet-stream",
+                                size=asset.formatted_size if not is_dir else None,
+                                modified=asset.modified_time,
+                                status_text=status_txt,
+                                on_click=click_cmd,
+                                on_sync=(lambda a=asset: self._sync_folder_action(ws, a.name)) if is_dir else (lambda a=asset: self._sync_asset_action(ws, a)),
+                                on_rename=lambda a=asset: self._rename_item_prompt(ws, a.name),
+                                on_delete=lambda a=asset: self._delete_item_confirm(ws, a.name),
+                                on_categorize=lambda a=asset: self._open_categorize_modal(ws, a.name, a.category),
+                                category=asset.category,
+                                is_uploading=is_uploading
+                            )
+                            card.pack(fill="x", padx=4, pady=3)
 
                 self.after(0, render_results)
 
@@ -599,29 +702,46 @@ class WorkspacesPage(DefaultLayout):
         actions_row = ctk.CTkFrame(modal, fg_color="transparent")
         actions_row.pack(fill="x", padx=20, pady=(0, 20))
 
-        ButtonComponent(
-            parent=actions_row,
-            label="✏️ Renomear",
-            size="small",
-            variant="primary",
-            onClick=lambda: [modal.destroy(), self._rename_item_prompt(ws, asset.name)]
-        ).pack(side="left", padx=5)
+        if asset.status.name == "OUT_OF_SYNC":
+            ButtonComponent(
+                parent=actions_row,
+                label="☁️ Reenviar ao Drive",
+                size="small",
+                variant="success",
+                onClick=lambda: [modal.destroy(), self._recreate_on_drive(ws, asset)]
+            ).pack(side="left", padx=5)
 
-        ButtonComponent(
-            parent=actions_row,
-            label="📦 Mover",
-            size="small",
-            variant="secondary",
-            onClick=lambda: [modal.destroy(), self._move_item_prompt(ws, asset.name)]
-        ).pack(side="left", padx=5)
+            ButtonComponent(
+                parent=actions_row,
+                label="🗑️ Remover Local",
+                size="small",
+                variant="danger",
+                onClick=lambda: [modal.destroy(), self._delete_local_only_confirm(ws, asset)]
+            ).pack(side="right", padx=5)
+        else:
+            ButtonComponent(
+                parent=actions_row,
+                label="✏️ Renomear",
+                size="small",
+                variant="primary",
+                onClick=lambda: [modal.destroy(), self._rename_item_prompt(ws, asset.name)]
+            ).pack(side="left", padx=5)
 
-        ButtonComponent(
-            parent=actions_row,
-            label="🗑️ Excluir",
-            size="small",
-            variant="danger",
-            onClick=lambda: [modal.destroy(), self._delete_item_confirm(ws, asset.name)]
-        ).pack(side="right", padx=5)
+            ButtonComponent(
+                parent=actions_row,
+                label="📦 Mover",
+                size="small",
+                variant="secondary",
+                onClick=lambda: [modal.destroy(), self._move_item_prompt(ws, asset.name)]
+            ).pack(side="left", padx=5)
+
+            ButtonComponent(
+                parent=actions_row,
+                label="🗑️ Excluir",
+                size="small",
+                variant="danger",
+                onClick=lambda: [modal.destroy(), self._delete_item_confirm(ws, asset.name)]
+            ).pack(side="right", padx=5)
 
     def _rename_item_prompt(self, ws, old_name: str) -> None:
         from state import AppState
@@ -1083,6 +1203,39 @@ class WorkspacesPage(DefaultLayout):
             message="Deseja excluir permanentemente este workspace do banco de dados local?",
             on_confirm=do_delete,
             confirm_label="Excluir",
+        )
+
+    def _recreate_on_drive(self, ws, asset) -> None:
+        from domain import SyncStatus
+        asset.status = SyncStatus.LOCAL_ONLY
+        self._sync_asset_action(ws, asset)
+
+    def _delete_local_only_confirm(self, ws, asset) -> None:
+        def do_delete():
+            local_path = asset.local_path
+            if local_path and os.path.exists(local_path):
+                try:
+                    os.remove(local_path)
+                except Exception as e:
+                    print(f"Erro ao remover arquivo local_only: {e}")
+            
+            # Remover do banco local
+            from use_cases import WorkspaceManagerUseCase
+            manager = WorkspaceManagerUseCase()
+            conn = manager._db.get_connection()
+            try:
+                conn.execute("DELETE FROM local_assets WHERE workspace_id = ? AND name = ?", (ws.id, asset.name))
+                conn.commit()
+            finally:
+                conn.close()
+            self._refresh_workspace_assets(ws)
+
+        ModalDialog(
+            self._parent,
+            title="Confirmar Remoção Local",
+            message=f"Deseja remover localmente o arquivo '{asset.name}' para sincronizar com a exclusão do Drive?",
+            on_confirm=do_delete,
+            confirm_label="Remover"
         )
 
     def _on_logout(self) -> None:

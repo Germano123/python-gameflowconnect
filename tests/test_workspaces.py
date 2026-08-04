@@ -553,6 +553,71 @@ class TestWorkspaceManagement(unittest.TestCase):
         self.assertEqual(assets2[0].name, "externo.png")
         self.assertEqual(assets2[0].status, SyncStatus.REMOTE_ONLY)
 
+    def test_out_of_sync_deleted_on_drive(self):
+        from domain import SyncStatus
+        # 1. Criar workspace temporário
+        ws = self.manager.create_workspace(
+            name="Out Of Sync Workspace",
+            description="Testing deleted on drive detection",
+            engine="Godot",
+            owner="test@gameflow.io",
+            drive_service=None,
+            local_path=os.path.join(self.test_db_dir, "out_of_sync_ws")
+        )
+        self.assertIsNotNone(ws)
+
+        # Forçar ID diferente de demo_folder no SQLite para buscar na nuvem
+        conn = self.manager._db.get_connection()
+        try:
+            conn.execute("UPDATE local_workspaces SET drive_folder_id = 'real_folder_id' WHERE id = ?", (ws.id,))
+            # 2. Registrar um asset local na tabela SQLite que já esteve SYNCHRONIZED
+            conn.execute(
+                "INSERT INTO local_assets (id, workspace_id, name, mime_type, size, local_path, status, last_sync) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                ("remote_drive_id_123", ws.id, "perdido.png", "image/png", 1024, os.path.join(ws.local_path, "perdido.png"), "SYNCHRONIZED", "2026-08-04 10:00")
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        ws.drive_folder_id = "real_folder_id"
+
+        # 3. Criar fisicamente o arquivo local
+        local_file_path = os.path.join(ws.local_path, "perdido.png")
+        with open(local_file_path, "w") as f:
+            f.write("dados locais do arquivo")
+
+        # 4. Simular o Drive retornando NENHUM arquivo (ou seja, foi deletado no Drive!)
+        class MockDriveEmpty:
+            def __init__(self):
+                self.is_authenticated = True
+                self._service = self
+                
+            def files(self):
+                return self
+                
+            def list(self, q, fields):
+                return self
+                
+            def execute(self, http=None):
+                return {"files": []}
+                
+            def get_or_create_root_folder(self, name):
+                return "root_id"
+                
+            def find_file_in_folder(self, parent_id, name):
+                return None
+                
+            def _get_http(self):
+                return None
+
+        mock_drive = MockDriveEmpty()
+        
+        # 5. Chamar a listagem e verificar que o arquivo local foi catalogado como OUT_OF_SYNC
+        assets = self.manager.get_workspace_assets_sync_status(ws.id, mock_drive)
+        self.assertEqual(len(assets), 1)
+        self.assertEqual(assets[0].name, "perdido.png")
+        self.assertEqual(assets[0].status, SyncStatus.OUT_OF_SYNC)
+
+
 
 
 

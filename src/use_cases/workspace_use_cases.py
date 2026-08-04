@@ -795,16 +795,39 @@ class WorkspaceManagerUseCase:
             except Exception as e:
                 print(f"Erro ao obter arquivos remotos no subpath {subpath}: {e}")
 
-        # 3. Adicionar arquivos locais pendentes de envio
+        # 3. Adicionar arquivos locais pendentes de envio (ou marcá-los como OUT_OF_SYNC se sumiram do Drive)
+        previously_synchronized = {}
+        try:
+            conn = self._db.get_connection()
+            cursor = conn.execute("SELECT name, id, status FROM local_assets WHERE workspace_id = ?", (workspace_id,))
+            for row in cursor.fetchall():
+                previously_synchronized[row["name"]] = {
+                    "id": row["id"],
+                    "status": row["status"]
+                }
+        except Exception as e:
+            print(f"Erro ao obter local_assets no cálculo de sync: {e}")
+        finally:
+            conn.close()
+
         for name, info in local_files.items():
             mime = "application/vnd.google-apps.folder" if info["is_dir"] else "application/octet-stream"
+            
+            status = SyncStatus.LOCAL_ONLY
+            drive_id = None
+            if name in previously_synchronized:
+                prev_info = previously_synchronized[name]
+                if prev_info["status"] == "SYNCHRONIZED":
+                    status = SyncStatus.OUT_OF_SYNC
+                    drive_id = prev_info["id"]
+
             remote_assets.append(Asset(
-                id=None,
+                id=drive_id,
                 name=name,
                 mime_type=mime,
                 size=info["size"],
                 local_path=info["path"],
-                status=SyncStatus.LOCAL_ONLY,
+                status=status,
                 modified_time=datetime.now().strftime("%Y-%m-%d %H:%M")
             ))
 
