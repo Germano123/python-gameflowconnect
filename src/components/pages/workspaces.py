@@ -419,6 +419,7 @@ class WorkspacesPage(DefaultLayout):
         self._left_panel.grid_remove()
         self._right_panel.grid(row=1, column=0, columnspan=2, sticky="nsew", padx=20, pady=(0, 20))
         self._hamburger_btn.place(relx=0.03, rely=0.92, anchor="sw")
+        self._hamburger_btn.lift()
 
     def _show_left_panel(self) -> None:
         self._hamburger_btn.place_forget()
